@@ -200,7 +200,7 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
         
         if not user:
             # 4. Jika User Belum Ada, Buatkan Otomatis (Auto-Register)
-            random_password = auth.get_password_hash(str(time.time()))
+            random_password = auth.get_password_hash("google_user_temp")
             
             new_user = database.User(
                 email=email, 

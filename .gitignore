@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Database (Hati-hati jangan upload DB)
+*.db
+*.sqlite3
+
+# Uploads & Logs (Jangan upload file user dan log)
+uploads/
+*.log
+
+# SECRET KEYS (PALING PENTING)
+.env
+config.py

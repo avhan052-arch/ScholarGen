@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarGen Admin Dashboard</title>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Font Awesome untuk Ikon Modern -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #4f46e5;       /* Indigo Modern */
+            --primary-dark: #4338ca;
+            --secondary: #64748b;
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --sidebar-width: 260px;
+            --header-height: 64px;
+            --transition: all 0.3s ease;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: #1e293b; /* Dark Slate */
+            color: white;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            z-index: 50;
+            transition: var(--transition);
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-header i { font-size: 1.5rem; color: var(--primary); }
+        .sidebar-header h2 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
+
+        .nav-menu {
+            flex: 1;
+            padding: 24px 16px;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #94a3b8;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            transition: var(--transition);
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--primary);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .nav-item i { width: 20px; text-align: center; }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: calc(100% - var(--sidebar-width));
+            transition: var(--transition);
+        }
+
+        /* --- TOP HEADER --- */
+        .top-header {
+            height: var(--header-height);
+            background: var(--bg-card);
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--text-main);
+            cursor: pointer;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .avatar {
+            width: 36px;
+            height: 36px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        /* --- DASHBOARD CONTENT --- */
+        .content-wrapper {
+            padding: 32px;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        .icon-blue { background: #eff6ff; color: var(--primary); }
+        .icon-yellow { background: #fffbeb; color: var(--warning); }
+
+        .stat-info h3 { font-size: 2rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+        .stat-info p { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
+
+        /* Tables */
+        .card-table {
+            background: var(--bg-card);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-header h1 { font-size: 1.25rem; font-weight: 600; }
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 600px; /* Agar scrollable di HP */
+        }
+
+        th {
+            text-align: left;
+            padding: 16px;
+            background: #f8fafc;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        th:first-child { border-top-left-radius: 8px; }
+        th:last-child { border-top-right-radius: 8px; }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text-main);
+            font-size: 0.9rem;
+            vertical-align: middle;
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        /* Buttons & Badges */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+        
+        .btn-success { background: #dcfce7; color: #166534; }
+        .btn-success:hover { background: #bbf7d0; }
+        
+        .btn-danger { background: #fee2e2; color: #991b1b; }
+        .btn-danger:hover { background: #fecaca; }
+        
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-pending { background: #fffbeb; color: #b45309; }
+        .badge-approved { background: #dcfce7; color: #15803d; }
+        .badge-rejected { background: #fee2e2; color: #b91c1c; }
+
+        /* Image Preview */
+        .img-proof {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+            transition: var(--transition);
+        }
+        .img-proof:hover { transform: scale(1.1); }
+
+        /* Modal Image */
+        #img-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 9999;
+            display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        #img-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+
+        .hidden { display: none !important; }
+
+        /* --- RESPONSIVE MEDIA QUERIES --- */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); width: 280px; box-shadow: 5px 0 15px rgba(0,0,0,0.1); }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { margin-left: 0; width: 100%; }
+            .menu-toggle { display: block; }
+            .content-wrapper { padding: 20px; }
+            
+            /* Overlay when sidebar active */
+            .sidebar-overlay {
+                display: none;
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 45;
+            }
+            .sidebar-overlay.active { display: block; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Overlay untuk Mobile -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-shield-halved"></i>
+            <h2>ScholarGen</h2>
+        </div>
+        
+        <div class="nav-menu">
+            <a class="nav-item active" onclick="switchView('dashboard')">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Dashboard</span>
+            </a>
+            <a class="nav-item" onclick="switchView('users')">
+                <i class="fa-solid fa-users"></i>
+                <span>User Management</span>
+            </a>
+            <a class="nav-item" onclick="switchView('topups')">
+                <i class="fa-solid fa-wallet"></i>
+                <span>Request Top Up</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <a class="nav-item" onclick="goHome()">
+                <i class="fa-solid fa-house"></i>
+                <span>Ke Website Utama</span>
+            </a>
+            <a class="nav-item" onclick="logout()" style="color: #ef4444;">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT WRAPPER -->
+    <div class="main-content">
+        
+        <!-- HEADER -->
+        <header class="top-header">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="user-profile">
+                <span>Administrator</span>
+                <div class="avatar">A</div>
+            </div>
+        </header>
+
+        <!-- CONTENT AREA -->
+        <div class="content-wrapper">
+            
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard">
+                <h1 style="margin-bottom: 24px; font-size: 1.5rem;">Overview Sistem</h1>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-blue">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="stat-users">0</h3>
+                            <p>Total User Terdaftar</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon icon-yellow">
+                            <i class="fa-solid fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="stat-pending">0</h3>
+                            <p>Request Menunggu</p>
+                        </div>
+                    </div>
+                    <!-- KARTU BARU: PENDAPATAN -->
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #dcfce7; color: #166534;">
+            <i class="fa-solid fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-info">
+            <h3 id="stat-revenue">Rp 0</h3>
+            <p>Total Pendapatan</p>
+        </div>
+    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: USER MANAGEMENT -->
+            <div id="view-users" class="hidden">
+                <div class="card-header">
+                    <h1>Manajemen User</h1>
+                    <button class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Tambah Admin</button>
+                </div>
+                
+                <div class="card-table">
+                    <div class="table-responsive">
+                        <table id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Email User</th>
+                                    <th>Saldo Kredit</th>
+                                    <th>Role</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody><!-- Data diisi JS --></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: TOP UP REQUESTS -->
+            <div id="view-topups" class="hidden">
+                <div class="card-header">
+                    <h1>Permintaan Top Up</h1>
+                     <!-- TAMBAHKAN TOMBOL FILTER INI -->
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary btn-sm" onclick="filterTable('all')">Semua</button>
+            <button class="btn btn-sm" style="background:#fbbf24; color:#78350f;" onclick="filterTable('Pending')">Menunggu</button>
+            <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Approved')">Approved</button>
+            <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Rejected')">Rejected</button>
+        </div>
+                </div>
+                
+                <div class="card-table">
+                    <div class="table-responsive">
+                        <table id="topups-table">
+                            <thead>
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>User Email</th>
+                                    <th>Jumlah</th>
+                                    <th>Bukti Transfer</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody><!-- Data diisi JS --></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL IMAGE PREVIEW -->
+    <div id="img-modal" onclick="this.style.display='none'">
+        <img id="preview-img" src="" alt="Bukti Transfer">
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let authToken = localStorage.getItem('access_token');
+
+        // --- MOBILE SIDEBAR TOGGLE ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        // --- AUTH CHECK ---
+        async function checkAdminAuth() {
+            if (!authToken) {
+                await Swal.fire({
+                    icon: 'info',
+                    title: 'Akses Ditolak',
+                    text: 'Harap login terlebih dahulu.'
+                });
+                window.location.href = '/admin-login';
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/admin/topup_requests`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!res.ok) throw new Error("Not Admin");
+                loadData();
+            } catch (e) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Forbidden',
+                    text: 'Anda tidak memiliki akses ke halaman ini.'
+                });
+                localStorage.removeItem('access_token');
+                window.location.href = '/admin-login';
+            }
+        }
+
+        // --- NAVIGATION ---
+        function switchView(viewName) {
+            ['dashboard', 'users', 'topups'].forEach(v => {
+                document.getElementById(`view-${v}`).classList.add('hidden');
+            });
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            // Tutup sidebar di mobile setelah klik menu
+            if(window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+        }
+
+        function goHome() { window.location.href = '/'; }
+        
+        function logout() {
+            Swal.fire({
+                title: 'Logout?',
+                text: "Anda yakin ingin keluar?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Ya, Logout'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    localStorage.removeItem('access_token');
+                    window.location.href = '/';
+                }
+            });
+        }
+
+        // --- DATA LOADING ---
+        async function loadData() {
+            loadStats();
+            loadUsers();
+            loadTopUps();
+        }
+
+            async function loadStats() {
+        try {
+            const res = await fetch(`${API_URL}/admin/stats`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            
+            // Update UI User
+            document.getElementById('stat-users').innerText = data.total_users;
+            
+            // Update UI Pending
+            document.getElementById('stat-pending').innerText = data.pending_requests;
+            
+            // --- TAMBAHKAN INI: Update UI Pendapatan ---
+            // Format angka menjadi format Rupiah (misal 100000 jadi 100.000)
+            const formattedRevenue = data.total_revenue.toLocaleString('id-ID');
+            document.getElementById('stat-revenue').innerText = `Rp ${formattedRevenue}`;
+        } catch (error) {
+            console.error("Gagal load stats:", error);
+        }
+    }
+
+        async function loadUsers() {
+            const res = await fetch(`${API_URL}/admin/users`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const json = await res.json();
+            const tbody = document.querySelector('#users-table tbody');
+            tbody.innerHTML = '';
+
+            json.users.forEach(u => {
+                const isDisabled = u.is_admin ? 'disabled' : '';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>#${u.id}</td>
+                        <td>${u.email} ${u.is_admin ? '<span class="badge badge-approved">Admin</span>' : ''}</td>
+                        <td style="font-weight:bold;">${u.credits} KR</td>
+                        <td>${u.is_admin ? 'Administrator' : 'User Biasa'}</td>
+                        <td>
+                            <button class="btn btn-success btn-sm" onclick="adjustCredit(${u.id}, 10, 'add')">
+                                <i class="fa-solid fa-plus"></i> 10
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="adjustCredit(${u.id}, 10, 'subtract')" ${isDisabled}>
+                                <i class="fa-solid fa-minus"></i> 10
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function loadTopUps() {
+            const res = await fetch(`${API_URL}/admin/topup_requests`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const json = await res.json();
+            const tbody = document.querySelector('#topups-table tbody');
+            tbody.innerHTML = '';
+
+            if (!json.requests) return;
+
+            json.requests.forEach(r => {
+                const filenameOnly = r.proof_filename.split('/').pop();
+                let badgeClass = r.status === 'Pending' ? 'badge-pending' : (r.status === 'Approved' ? 'badge-approved' : 'badge-rejected');
+                const imgSrc = `${API_URL}/static_uploads/${r.proof_filename}`;
+                
+                let actionButtons = '';
+                if (r.status === 'Pending') {
+                    actionButtons = `
+                        <button class="btn btn-success btn-sm" onclick="approveTopUp(${r.id})">Setujui</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectTopUp(${r.id})">Tolak</button>
+                    `;
+                } else {
+                    actionButtons = '<span style="color:#94a3b8; font-size:0.85rem;">Selesai</span>';
+                }
+
+                tbody.innerHTML += `
+                    <tr id="req-row-${r.id}">
+                        <td>${r.created_at.split('T')[0]}</td>
+                        <td>${r.user_email}</td>
+                        <td style="font-weight:bold; color:var(--primary);">${r.amount} KR</td>
+                        <td>
+                            ${r.proof_filename ? `<img src="${API_URL}/static_uploads/${filenameOnly}" class="img-proof" onclick="showImage('${API_URL}/static_uploads/${filenameOnly}')">` : '-'}
+                        </td>
+                        <td><span class="badge ${badgeClass}" id="status-${r.id}">${r.status}</span></td>
+                        <td id="actions-${r.id}">
+                            ${actionButtons}
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // --- ACTIONS ---
+        async function approveTopUp(id) {
+            const result = await Swal.fire({
+                title: 'Setujui Top Up?',
+                text: "Pastikan bukti transfer sudah benar dan sesuai nominal.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#ef4444',
+                confirmButtonText: 'Ya, Setujui!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/approve_topup/${id}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    
+                    if(res.ok) {
+                        Swal.fire('Disetujui!', 'Request top up berhasil disetujui.', 'success');
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat menyetujui.', 'error');
+                }
+            }
+        }
+
+        async function rejectTopUp(id) {
+            const result = await Swal.fire({
+                title: 'Tolak Top Up?',
+                text: "Anda yakin ingin menolak permintaan ini?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Ya, Tolak!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/reject_topup/${id}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    
+                    if(res.ok) {
+                        Swal.fire('Ditolak', 'Request top up telah ditolak.', 'info');
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat menolak.', 'error');
+                }
+            }
+        }
+
+        async function adjustCredit(userId, amount, action) {
+            const confirmMsg = action === 'add' 
+                ? `Tambahkan ${amount} kredit ke user ini?` 
+                : `Kurangi ${amount} kredit dari user ini?`;
+
+            const result = await Swal.fire({
+                title: 'Update Saldo?',
+                text: confirmMsg,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('amount', amount);
+                formData.append('action', action);
+
+                try {
+                    const res = await fetch(`${API_URL}/admin/update_credits`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` },
+                        body: formData
+                    });
+                    
+                    if(res.ok) {
+                        const type = action === 'add' ? 'success' : 'info';
+                        Swal.fire('Sukses', 'Saldo berhasil diupdate.', type);
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Gagal mengupdate saldo user.', 'error');
+                }
+            }
+        }
+
+        function showImage(src) {
+            const modal = document.getElementById('img-modal');
+            document.getElementById('preview-img').src = src;
+            modal.style.display = 'flex';
+        }
+
+        // --- WEBSOCKET & TOASTS ---
+        let wsConnection = null;
+
+        function initWebSocket(userId) {
+            if (wsConnection) wsConnection.close();
+            const wsUrl = `ws://localhost:8000/ws/${userId}`;
+            wsConnection = new WebSocket(wsUrl);
+
+            wsConnection.onopen = function(event) { console.log("✅ WS Connected"); };
+
+            wsConnection.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'credit_update') {
+                    const creditEl = document.getElementById('user-credits');
+                    if(creditEl) creditEl.innerText = data.amount;
+                    if (data.message) {
+                        const Toast = Swal.mixin({
+                            toast: true, position: 'top-end',
+                            showConfirmButton: false, timer: 3000,
+                            timerProgressBar: true
+                        });
+                        Toast.fire({ icon: 'info', title: data.message });
+                    }
+                }
+            };
+            wsConnection.onclose = function() { wsConnection = null; };
+            wsConnection.onerror = function(error) { console.log("WS Error", error); };
+        }
+        
+        async function initAdminWebSocket() {
+            const token = localStorage.getItem('access_token');
+            const wsUrl = `ws://localhost:8000/ws/admin?token=${token}`;
+            console.log("Admin WS Connecting...");
+
+            const Toast = Swal.mixin({
+                toast: true, position: 'top-end',
+                showConfirmButton: false, timer: 5000,
+                timerProgressBar: true, icon: 'info'
+            });
+
+            wsConnection = new WebSocket(wsUrl);
+
+            wsConnection.onopen = function(event) { console.log("🛡️ Admin WS Terhubung"); };
+
+            wsConnection.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+                console.log("📨 Admin Event:", msg);
+
+                if (msg.type === "new_request") {
+                    addRequestRow(msg.data);
+                    const currentPending = parseInt(document.getElementById('stat-pending').innerText);
+                    document.getElementById('stat-pending').innerText = currentPending + 1;
+                    
+                    Toast.fire({
+                        icon: 'success',
+                        title: `Top Up Baru: ${msg.data.amount} KR`,
+                        text: msg.data.user_email
+                    });
+                }
+                else if (msg.type === "update_request") {
+                    updateRequestStatus(msg.id, msg.new_status);
+                    const currentPending = parseInt(document.getElementById('stat-pending').innerText);
+                    document.getElementById('stat-pending').innerText = Math.max(0, currentPending - 1);
+                }
+                // --- TAMBAHKAN INI: UPDATE PENDAPATAN REALTIME ---
+                else if (msg.type === "update_revenue") {
+                    const formattedRevenue = msg.total_revenue.toLocaleString('id-ID');
+                    
+                    // Animasi kecil agar terlihat update
+                    const revElement = document.getElementById('stat-revenue');
+                    revElement.innerText = `Rp ${formattedRevenue}`;
+                    revElement.style.color = '#166534'; // Warna hijau tua sebentar
+                    setTimeout(() => { revElement.style.color = 'var(--text-main)'; }, 500);
+                }
+            };
+
+            wsConnection.onclose = function() {
+                console.log("❌ Admin WS Terputus");
+                setTimeout(initAdminWebSocket, 5000);
+            };
+        }
+
+        function addRequestRow(data) {
+            const tbody = document.querySelector('#topups-table tbody');
+            const filenameOnly = data.proof_filename.split('/').pop();
+            const tr = document.createElement('tr');
+            tr.id = `req-row-${data.id}`;
+            
+            let badgeClass = data.status === 'Pending' ? 'badge-pending' : 'badge-approved';
+            
+            tr.innerHTML = `
+                <td>${data.created_at.split('T')[0]}</td>
+                <td>${data.user_email}</td>
+                <td style="font-weight:bold; color:var(--primary);">${data.amount} KR</td>
+                <td>
+                    <img src="${API_URL}/static_uploads/${filenameOnly}" class="img-proof" onclick="showImage('${API_URL}/static_uploads/${filenameOnly}')">
+                </td>
+                <td><span class="badge ${badgeClass}" id="status-${data.id}">${data.status}</span></td>
+                <td id="actions-${data.id}">
+                    ${data.status === 'Pending' ? `
+                    <button class="btn btn-success btn-sm" onclick="approveTopUp(${data.id})">Setujui</button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectTopUp(${data.id})">Tolak</button>
+                    ` : '<span style="color:#94a3b8; font-size:0.85rem;">Selesai</span>'}
+                </td>
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
+        function updateRequestStatus(id, newStatus) {
+            const statusSpan = document.getElementById(`status-${id}`);
+            const actionsDiv = document.getElementById(`actions-${id}`);
+            
+            if (statusSpan && actionsDiv) {
+                statusSpan.className = `badge ${newStatus === 'Approved' ? 'badge-approved' : 'badge-rejected'}`;
+                statusSpan.innerText = newStatus;
+                actionsDiv.innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">Selesai</span>';
+            }
+        }
+
+        // --- FUNGSI FILTER TABEL TOP UP ---
+function filterTable(status) {
+    const rows = document.querySelectorAll('#topups-table tbody tr');
+    
+    rows.forEach(row => {
+        // Ambil status dari kolom status (span dengan id="status-{id}")
+        const statusSpan = row.querySelector(`span[id^="status-"]`);
+        if (statusSpan) {
+            const currentStatus = statusSpan.innerText;
+            
+            if (status === 'all') {
+                row.style.display = ''; // Tampilkan semua
+            } else {
+                if (currentStatus === status) {
+                    row.style.display = ''; // Tampilkan jika cocok
+                } else {
+                    row.style.display = 'none'; // Sembunyikan jika tidak cocok
+                }
+            }
+        }
+    });
+}
+        // --- INIT ---
+        window.onload = function() {
+            checkAdminAuth(); 
+            initAdminWebSocket(); 
+        };
+    </script>
+</body>
+</html>

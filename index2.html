@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarGen SaaS</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        input, select, textarea { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-primary { background: #007bff; }
+        .btn-success { background: #28a745; }
+        .hidden { display: none !important; }
+        .user-info { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #007bff, #0056b3); color: white; padding: 15px 25px; border-radius: 10px; margin-bottom: 20px; }
+        .credits-badge { background: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 20px; }
+        #result { border: 1px solid #eee; padding: 15px; min-height: 150px; white-space: pre-wrap; line-height: 1.6; }
+        .paper-item { border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .btn-topup { background: #ffc107; color: #333; padding: 5px 15px; font-size: 0.9rem; margin-left: 5px; }
+                /* Pastikan style ini ada dan benar */
+              .modal {
+            position: fixed; /* WAJIB FIXED */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999; /* Z-Index sangat tinggi */
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 400px; /* Lebar kotak */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            position: relative; /* Penting untuk posisi relatif */
+        }
+        .history-item {
+            border-bottom: 1px solid #eee; padding: 10px 0; font-size: 0.9rem;
+        }
+        .status-pending { color: #ffc107; font-weight: bold; }
+        .status-approved { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. HALAMAN LOGIN -->
+    <div id="auth-view" class="card" style="max-width: 400px; margin: 50px auto;">
+        <h2 style="text-align: center; color: #333;">ScholarGen Login</h2>
+        <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+            <button onclick="switchAuthMode('login')" style="background:#ddd; color:#333; width:50%;">Login</button>
+            <button onclick="switchAuthMode('register')" style="background:#ddd; color:#333; width:50%;">Daftar</button>
+        </div>
+        <form id="auth-form" onsubmit="handleAuth(event)">
+            <input type="email" id="email" placeholder="Email Address" required>
+            <input type="password" id="password" placeholder="Password" required>
+            <button type="submit" class="btn-primary" id="auth-btn">Masuk</button>
+        </form>
+        <p id="auth-msg" style="color: red; text-align: center; font-size: 0.9rem;"></p>
+    </div>
+
+    <!-- 2. DASHBOARD UTAMA (HIDDEN DULU) -->
+    <div id="dashboard-view" class="hidden">
+        
+                <!-- Navbar User -->
+        <div class="user-info">
+            <div>
+                <h3 style="margin:0;">👋 Selamat Datang!</h3>
+                <small>Generate skripsi akademis dengan AI & Referensi Nyata.</small>
+            </div>
+            <div style="text-align: right;">
+                <div class="credits-badge">
+                    Sisa Kredit: <b id="user-credits">0</b>
+                    <!-- Di dalam div class="user-info" -->
+        <button onclick="openTopUpModal()" class="btn-topup" title="Isi Saldo Manual">+ Top Up</button>
+                </div>
+                <button onclick="logout()" style="background: rgba(0,0,0,0.2); width: auto; padding: 5px 15px; margin-top: 5px; font-size: 0.85rem;">Logout</button>
+            </div>
+        </div>
+
+                <!-- Bagian A: Generator (Alur Baru) -->
+        <div class="card">
+            <h3>📝 Generator Karya Tulis</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <select id="jenis_dokumen">
+                    <option value="Skripsi">Skripsi (S1)</option>
+                    <option value="Tesis">Tesis (S2)</option>
+                    <option value="Artikel Jurnal">Artikel Jurnal</option>
+                </select>
+                <select id="bab">
+                    <option value="Bab 1 Pendahuluan">Bab 1: Pendahuluan</option>
+                    <option value="Bab 2 Tinjauan Pustaka">Bab 2: Tinjauan Pustaka</option>
+                    <option value="Bab 3 Metodologi">Bab 3: Metodologi</option>
+                    <option value="Bab 4 Hasil dan Pembahasan">Bab 4: Hasil & Pembahasan</option>
+                </select>
+            </div>
+            <input type="text" id="judul" placeholder="Masukkan Judul / Topik Penelitian..." style="font-weight: bold;">
+            <input type="text" id="kata_kunci" placeholder="Kata Kunci Tambahan (Opsional)">
+            
+            <!-- Langkah 1: Pencarian -->
+            <button onclick="searchRefs()" style="background: #6c757d; margin-top: 10px;">🔍 1. Cari Referensi Dulu</button>
+        </div>
+
+        <!-- Bagian B: Hasil Pencarian (Centang Referensi) -->
+        <div class="card">
+            <h3>📚 Pilih Referensi</h3>
+            <p style="font-size: 0.9rem; color: #666;">Centang paper yang ingin digunakan AI sebagai dasar tulisan.</p>
+            <div id="search-results-list" style="max-height: 300px; overflow-y: auto;"></div>
+            
+            <!-- Langkah 2: Generate -->
+            <button onclick="generateDraft()" class="btn-primary" style="margin-top: 15px;">✨ 2. Generate Draft (1 Kredit)</button>
+        </div>
+
+        <!-- Bagian C: Hasil & Export -->
+        <div class="card">
+            <h3>📄 Hasil Penulisan & Progress</h3>
+            <ul id="chapter-list-display" style="font-size: 0.9rem; margin-bottom: 15px; color: #555;"></ul>
+            <div id="result" contenteditable="true" style="background: #fafafa; border: 1px dashed #ccc;"></div>
+                                    <div id="editor-section" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>✍️ Editor Revisi AI</h3>
+                <span id="current-editing-label" style="color: #007bff; font-weight: bold;">Belum ada bab dipilih</span>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                <label style="font-weight: bold; font-size: 0.9rem;">Perintah Revisi / Tambahkan:</label>
+                <input type="text" id="refine-instruction" placeholder="Contoh: Tambahkan paragraf tentang dampak ekonomi...">
+                <button onclick="refineChapter()" class="btn-primary" style="background: #17a2b8;">✍️ Edit Bab dengan AI</button>
+            </div>
+
+            <!-- <ul id="chapter-list-display" style="font-size: 0.9rem; margin-bottom: 10px; color: #555;"></ul>
+            <div id="result" contenteditable="true" style="background: #fff; border: 1px solid #ccc; padding: 20px; min-height: 300px; outline: none;"></div> -->
+            
+            <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button onclick="saveManualEdit()" style="background: #6c757d; font-size: 0.9rem;">💾 Simpan Perubahan Manual</button>
+                <button onclick="exportFullDocument()" class="btn-success">📥 Download Lengkap (Word)</button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+        <!-- MODAL TOP UP BARU (Dengan Harga Paket & Upload Bukti) -->
+    <div id="topup-modal" class="hidden">
+        <div class="modal-content">
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Form Top Up</h3>
+            
+            <!-- 1. Pilih Paket -->
+            <label style="font-weight: bold;">Pilih Paket Kredit:</label>
+            <select id="topup-amount">
+                <option value="10">10 Kredit - Rp 10.000</option>
+                <option value="50">50 Kredit - Rp 45.000</option>
+                <option value="100">100 Kredit - Rp 80.000</option>
+            </select>
+            
+            <!-- 2. Informasi Bank (Statis) -->
+            <div style="background: #f0f8ff; padding: 10px; border: 1px solid #b0c4de; border-radius: 5px; margin: 10px 0;">
+                <p style="margin:0; font-size: 0.9rem;"><b>Transfer ke:</b></p>
+                <p style="margin:5px 0; font-size: 1.1rem; color: #007bff;">BCA: 123-456-7890</p>
+                <p style="margin:0; font-size: 0.9rem; color: #666;">a.n Admin ScholarGen</p>
+            </div>
+
+            <!-- 3. Upload Bukti -->
+            <label>Upload Bukti Pembayaran:</label>
+            <input type="file" id="topup-proof" accept="image/*" style="margin-bottom: 15px;">
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeModal()" style="background: #ccc; color: #333;">Batal</button>
+                <!-- Tombol Upload -->
+                <button onclick="submitTopUp()" class="btn-primary">📤 Upload & Kirim Request</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- VARIABLES ---
+        let authToken = localStorage.getItem('access_token');
+        let savedChapters = {}; 
+        let currentDraftMarkdown = "";
+
+        // --- AUTH LOGIC ---
+        function checkAuth() {
+            if (authToken) {
+                document.getElementById('auth-view').classList.add('hidden');
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                // Di real app, fetch /me untuk ambil data user aktual
+            } else {
+                document.getElementById('auth-view').classList.remove('hidden');
+                document.getElementById('dashboard-view').classList.add('hidden');
+            }
+        }
+
+        function switchAuthMode(mode) {
+            const btn = document.getElementById('auth-btn');
+            window.currentAuthMode = mode;
+            btn.innerText = mode === 'login' ? 'Masuk' : 'Daftar';
+        }
+        window.currentAuthMode = 'login';
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msg = document.getElementById('auth-msg');
+
+            let url = window.currentAuthMode === 'login' ? '/token' : '/register';
+            let formData = new FormData();
+            
+            // Field name handling
+            if (window.currentAuthMode === 'login') formData.append('username', email);
+            else formData.append('email', email);
+            
+            formData.append('password', password);
+
+            try {
+                const res = await fetch('http://localhost:8000' + url, { method: 'POST', body: formData });
+                if(!res.ok) { const err = await res.json(); throw new Error(err.detail || "Error"); }
+                
+                const data = await res.json();
+                if(data.access_token) {
+                    authToken = data.access_token;
+                    localStorage.setItem('access_token', authToken);
+                    document.getElementById('user-credits').innerText = data.credits; // Set kredit awal
+                    checkAuth();
+                } else {
+                    alert(data.message);
+                }
+            } catch (err) { msg.innerText = err.message; }
+        }
+
+function logout() {
+            // 1. Hapus token dari penyimpanan browser
+            localStorage.removeItem('access_token');
+            localStorage.clear(); // Opsional: bersihkan semua cache localstorage
+
+            // 2. Reset variable aplikasi
+            authToken = null;
+            savedChapters = {};
+            activeChapterKey = null;
+
+            // 3. Paksa Refresh Browser agar kembali ke halaman Login
+            window.location.reload();
+        }
+
+        // --- API HELPER ---
+async function apiCall(endpoint, body = {}) {
+        // Debug: Cek data yang dikirim
+        console.log("Mengirim ke:", endpoint);
+        console.log("Data:", body);
+
+        return fetch('http://localhost:8000' + endpoint, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}` 
+            },
+            body: JSON.stringify(body)
+        });
+    }
+
+        // --- GENERATOR LOGIC ---
+                async function generateDraft() {
+            // 1. Kumpulkan Referensi yang Dicentang
+            const checkboxes = document.querySelectorAll('.ref-checkbox:checked');
+            selectedReferences = Array.from(checkboxes).map(cb => cb.value);
+
+            if (selectedReferences.length === 0) {
+                return alert("Silakan pilih (centang) minimal satu referensi dari daftar pencarian di atas!");
+            }
+
+            const data = {
+                jenis_dokumen: document.getElementById('jenis_dokumen').value,
+                judul: document.getElementById('judul').value,
+                bab: document.getElementById('bab').value,
+                kata_kunci: document.getElementById('kata_kunci').value,
+                // KIRIM LIST REFERENSI YANG DIPILIH KE BACKEND
+                selected_references: selectedReferences 
+            };
+
+            if(!data.judul) return alert("Isi judul!");
+            
+            const btn = document.querySelector('button[onclick="generateDraft()"]');
+            const resDiv = document.getElementById('result');
+            
+            btn.disabled = true; 
+            btn.innerText = "AI Menulis berdasarkan Referensi Terpilih...";
+            resDiv.innerText = "Sedang menyusun draft...";
+
+            try {
+                // Sisa logika sama seperti sebelumnya
+                const res = await apiCall('/generate', data);
+                const json = await res.json();
+                
+                if(!res.ok) throw new Error(json.detail);
+
+                activeChapterKey = data.bab;
+                savedChapters[data.bab] = json.data;
+                currentDraftMarkdown = json.data;
+                
+                renderContent(json.data);
+                
+                document.getElementById('editor-section').classList.remove('hidden');
+                document.getElementById('current-editing-label').innerText = `Sedang mengedit: ${data.bab}`;
+
+                document.getElementById('user-credits').innerText = json.remaining_credits;
+                updateChapterList();
+
+            } catch (err) { alert(err.message); }
+            finally { 
+                btn.disabled = false; 
+                btn.innerText = "✨ 2. Generate Draft (1 Kredit)"; 
+            }
+        }
+
+        // --- SEARCH LOGIC ---
+        // async function searchPaper() {
+        //     const q = document.getElementById('search-query').value;
+        //     const list = document.getElementById('search-results-list');
+        //     if(!q) return;
+
+        //     list.innerHTML = '<p style="color:#777">Mencari...</p>';
+        //     try {
+        //         const res = await apiCall('/search', { query: q });
+        //         const json = await res.json();
+                
+        //         list.innerHTML = '';
+        //         if(json.data.length === 0) { list.innerHTML = '<p>Tidak ditemukan.</p>'; return; }
+
+        //         json.data.forEach(p => {
+        //             list.innerHTML += `
+        //                 <div class="paper-item">
+        //                     <b>${p.title}</b><br>
+        //                     <small>${p.authors} (${p.year})</small><br>
+        //                     <small>Cited: ${p.citation_count}</small><br>
+        //                     <button onclick="copyToClipboard('${p.citation_apa.replace(/'/g, "\\'")}')" style="width:auto; font-size:0.8rem; background:#eee; color:#333; margin-top:5px;">Salin APA</button>
+        //                 </div>`;
+        //         });
+        //     } catch (err) { alert(err.message); }
+        // }
+
+                // Variable untuk menyimpan referensi yang dicentang
+        let selectedReferences = [];
+
+        async function searchRefs() {
+            const q = document.getElementById('judul').value;
+            const list = document.getElementById('search-results-list');
+            
+            if(!q) return alert("Isi judul/topik pencarian dulu!");
+            
+            list.innerHTML = '<p style="text-align:center; color:#777">Mencari di OpenAlex...</p>';
+
+            try {
+                const res = await apiCall('/search', { query: q });
+                const json = await res.json();
+                
+                list.innerHTML = '';
+                selectedReferences = []; // Reset pilihan
+                
+                if(json.data.length === 0) { 
+                    list.innerHTML = '<p style="text-align:center;">Tidak ditemukan referensi.</p>'; 
+                    return; 
+                }
+
+                // Render Hasil dengan Checkbox
+                json.data.forEach((p, index) => {
+                    const item = document.createElement('div');
+                    item.style.border = '1px solid #eee';
+                    item.style.padding = '10px';
+                    item.style.marginBottom = '10px';
+                    item.style.borderRadius = '5px';
+                    
+                    // --- PERBAIKAN DISINI ---
+                    item.style.display = 'flex';
+                    item.style.alignItems = 'center'; // Sejajar tengah
+                    item.style.gap = '5px';            // KURANGI GAP jadi 5px agar lebih rapat
+                    // --------------------
+
+                    const refData = `${p.title} (${p.year}) - ${p.authors}`;
+
+                    item.innerHTML = `
+                        <!-- Style "margin: 0" untuk menghapus jarak default browser -->
+                        <input type="checkbox" class="ref-checkbox" value="${refData}" style="width: auto; margin: 0; transform: scale(1.2);">
+                        
+                        <div style="flex:1;">
+                            <b>${p.title}</b><br>
+                            <small>${p.authors} (${p.year})</small><br>
+                            <small>Cited: ${p.citation_count}</small>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+
+            } catch (err) { 
+                console.error(err);
+                list.innerHTML = '<p style="color:red">Gagal mencari.</p>';
+            }
+        }
+
+        function copyToClipboard(text) { navigator.clipboard.writeText(text); alert("Disalin!"); }
+
+        // --- EXPORT LOGIC ---
+        async function exportFullDocument() {
+            const judul = document.getElementById('judul').value || "Skripsi";
+            if(Object.keys(savedChapters).length === 0) return alert("Generate minimal satu bab dulu!");
+
+            try {
+                const res = await apiCall('/export-complete', { title: judul, chapters: savedChapters });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${judul}_Lengkap.docx`;
+                document.body.appendChild(a); a.click(); a.remove();
+            } catch (err) { alert("Gagal export"); }
+        }
+
+        function updateChapterList() {
+            const list = document.getElementById('chapter-list-display');
+            list.innerHTML = Object.keys(savedChapters).map(b => `<li>✅ ${b}</li>`).join('');
+        }
+
+                // --- FITUR TOP UP KREDIT ---
+                // --- LOGIKA MODAL & TOPUP ---
+        function openTopUpModal() {
+            document.getElementById('topup-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('topup-modal').classList.add('hidden');
+        }
+
+                // Fungsi Khusus Upload File (Tidak pakai apiCall JSON)
+        async function submitTopUp() {
+            const amount = document.getElementById('topup-amount').value;
+            const fileInput = document.getElementById('topup-proof');
+            
+            // Validasi
+            if (!fileInput.files.length) {
+                return alert("Mohon upload bukti pembayaran (foto/gambar).");
+            }
+            
+            // Siapkan FormData untuk upload
+            const formData = new FormData();
+            formData.append("amount", amount);
+            formData.append("proof", fileInput.files[0]); // File bukti
+
+            const btn = document.querySelector('button[onclick="submitTopUp()"]');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "Mengirim...";
+
+            try {
+                const res = await fetch('http://localhost:8000/request_topup', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}` 
+                        // JANGAN set 'Content-Type': 'application/json' disini, karena browser otomatis set boundary untuk file
+                    },
+                    body: formData
+                });
+
+                const json = await res.json();
+                
+                if(!res.ok) throw new Error(json.detail);
+                
+                alert(json.message);
+                closeModal();
+                loadTopUpHistory(); // Refresh riwayat
+
+            } catch (err) {
+                alert("Gagal: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        async function loadTopUpHistory() {
+            try {
+                const res = await fetch('http://localhost:8000/my_topups', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const json = await res.json();
+                const listDiv = document.getElementById('topup-list');
+                
+                if(json.history.length === 0) {
+                    listDiv.innerHTML = '<p style="color:#777">Belum ada riwayat.</p>';
+                    return;
+                }
+
+                let html = '';
+                json.history.forEach(h => {
+                    let statusClass = h.status === 'Pending' ? 'status-pending' : 'status-approved';
+                    html += `
+                        <div class="history-item">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>${h.amount} Kredit (${h.method})</span>
+                                <span class="${statusClass}">${h.status}</span>
+                            </div>
+                            <small>${h.created_at}</small>
+                             ${h.status === 'Pending' ? `<button onclick="approveTopUp(${h.id})" style="font-size:0.7rem; width:auto;">Setujui (Admin)</button>` : ''}
+                        </div>
+                    `;
+                });
+                listDiv.innerHTML = html;
+
+            } catch (err) { console.error(err); }
+        }
+
+        // Panggil history saat halaman dimuat
+        checkAuth().then(() => loadTopUpHistory());
+    let activeChapterKey = null; // Menyimpan bab mana yang sedang diedit
+
+            async function approveTopUp(id) {
+    if(!confirm("Simulasi Admin: Setujui request ini?")) return;
+    const res = await fetch(`http://localhost:8000/admin_approve_topup/${id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if(res.ok) {
+        alert("Disetujui! Kredit ditambahkan.");
+        loadTopUpHistory(); // Refresh saldo akan muncul via /me atau refresh halaman
+    }
+}
+
+    // --- FUNGSI REFINE (EDIT AI) ---
+    async function refineChapter() {
+        // 1. Validasi
+        if (!activeChapterKey) {
+            return alert("Pilih atau generate bab terlebih dahulu!");
+        }
+        if (!savedChapters[activeChapterKey]) {
+            return alert("Belum ada konten untuk diedit.");
+        }
+
+        const instruction = document.getElementById('refine-instruction').value;
+        if (!instruction) return alert("Masukkan perintah revisi!");
+
+        const btn = document.querySelector('button[onclick="refineChapter()"]');
+        const originalText = btn.innerText;
+        
+        try {
+            btn.disabled = true;
+            btn.innerText = "AI sedang mengedit...";
+            document.getElementById('result').innerText = "Sedang menyusun ulang bab berdasarkan perintah Anda...";
+
+            // 2. Panggil Backend
+            const res = await apiCall('/refine', {
+                bab_key: activeChapterKey,
+                current_content: savedChapters[activeChapterKey], // Kirim teks ASLI
+                instruction: instruction
+            });
+
+            const json = await res.json();
+            
+            if(!res.ok) throw new Error(json.detail);
+
+            // 3. Update Memori dan Tampilan
+            savedChapters[activeChapterKey] = json.data; // Overwrite dengan teks baru
+            currentDraftMarkdown = json.data;
+
+            // Render ke HTML
+            renderContent(json.data);
+            
+            // Update Kredit
+            document.getElementById('user-credits').innerText = json.remaining_credits;
+            
+            alert("Bab berhasil direvisi!");
+
+        } catch (err) {
+            alert(err.message);
+            // Kembalikan teks lama jika gagal
+            if(savedChapters[activeChapterKey]) renderContent(savedChapters[activeChapterKey]);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    // --- FUNGSI RENDER & SIMPAN MANUAL ---
+    
+    // Fungsi helper untuk menampilkan markdown ke HTML
+    function renderContent(markdownText) {
+        const resDiv = document.getElementById('result');
+        resDiv.innerHTML = markdownText
+            .replace(/### (.*?)/g, '<h3>$1</h3>')
+            .replace(/## (.*?)/g, '<h2>$1</h2>')
+            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+            .replace(/\n/g, '<br>');
+    }
+
+    // Fungsi untuk menyimpan hasil ketikan manual user
+    function saveManualEdit() {
+        if (!activeChapterKey) return alert("Tidak ada bab aktif.");
+        
+        const rawText = document.getElementById('result').innerText;
+        savedChapters[activeChapterKey] = rawText;
+        
+        alert("Perubahan manual tersimpan di memori untuk di-download nanti.");
+        updateChapterList();
+    }
+        checkAuth();
+    </script>
+</body>
+</html>

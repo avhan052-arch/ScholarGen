@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+sqlalchemy
+google-auth
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+requests
+groq
+scholarly
+python-docx
+python-telegram-bot

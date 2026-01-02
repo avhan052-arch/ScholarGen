@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Skripsi AI (Demo)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input, select, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #result { margin-top: 20px; white-space: pre-wrap; line-height: 1.6; }
+        .loading { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <h1>✍️ Generator Karya Tulis AI</h1>
+    
+    <div class="card">
+        <h3>Konfigurasi</h3>
+        
+        <label>Jenis Dokumen</label>
+        <select id="jenis_dokumen">
+            <option value="Skripsi">Skripsi (S1)</option>
+            <option value="Tesis">Tesis (S2)</option>
+            <option value="Artikel Jurnal">Artikel Jurnal</option>
+        </select>
+
+        <label>Judul / Topik Penelitian</label>
+        <input type="text" id="judul" placeholder="Contoh: Pengaruh AI terhadap Produktivitas Mahasiswa">
+
+        <label>Bab yang Akan Dibuat</label>
+        <select id="bab">
+            <option value="Bab 1 Pendahuluan (Latar Belakang & Rumusan Masalah)">Bab 1: Pendahuluan</option>
+            <option value="Bab 2 Tinjauan Pustaka">Bab 2: Tinjauan Pustaka</option>
+            <option value="Bab 3 Metodologi Penelitian">Bab 3: Metodologi</option>
+            <option value="Bab 4 Hasil dan Pembahasan">Bab 4: Hasil dan Pembahasan</option>
+        </select>
+
+        <label>Kata Kunci (Opsional)</label>
+        <input type="text" id="kata_kunci" placeholder="Teknologi, Pendidikan, Statistik">
+            <!-- TAMBAHKAN BLOK INI DI index.html (DI BAWAH FORM GENERATOR) -->
+
+    <div class="card">
+        <h3>🔍 Cari Referensi Nyata (OpenAlex)</h3>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="search-query" placeholder="Cari topik paper (misal: AI in Education)..." style="flex: 1;">
+            <button onclick="searchPaper()" style="background: #28a745;">Cari Paper</button>
+        </div>
+        
+        <div id="search-results-list" style="margin-top: 15px;">
+            <!-- Hasil pencarian muncul di sini -->
+        </div>
+    </div>
+        <button onclick="generateDraft()" id="btn-generate">🚀 Generate Draft</button>
+    </div>
+
+    <div class="card">
+        <h3>Hasil Penulisan</h3>
+        <div id="status" class="loading"></div>
+        <div id="result" contenteditable="true" style="border: 1px solid #eee; padding: 15px; min-height: 200px;">
+            Hasil tulisan akan muncul di sini...
+        </div>
+            <!-- UI Tambahan untuk melihat status bab -->
+    <div style="margin-bottom: 10px; font-size: 0.9rem; background: #e9ecef; padding: 10px; border-radius: 4px;">
+        <b>Progress Dokumen:</b>
+        <ul id="chapter-list-display" style="margin: 5px 0; padding-left: 20px;">
+            <li style="color:#777;">Belum ada bab.</li>
+        </ul>
+    </div>
+
+    <!-- Tombol Export Baru (Ganti tombol lama) -->
+    <button onclick="exportFullDocument()" style="background: #2b5797; font-size: 1.1rem; padding: 12px 20px;">📥 Download Skripsi Lengkap (1 File)</button>
+            <!-- Taruh di bawah hasil tulisan -->
+        <button onclick="exportToWord()" style="background: #2b5797; margin-top: 10px;">📥 Export ke Microsoft Word</button>
+    </div>
+
+    <script>
+            // TAMBAHKAN FUNGSI INI DI SCRIPT SECTION
+    let savedChapters = {}; 
+     async function searchPaper() {
+        const query = document.getElementById('search-query').value;
+        const resultsDiv = document.getElementById('search-results-list');
+
+        if (!query) return alert("Isi kata kunci pencarian!");
+
+        resultsDiv.innerHTML = '<p style="color:#666;">Sedang mencari di database OpenAlex...</p>';
+
+        try {
+            const response = await fetch('http://localhost:8000/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query })
+            });
+
+            // Cek apakah status response OK (200)
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Gagal menghubungi server");
+            }
+
+            const resData = await response.json();
+            
+            // --- PERBAIKAN UTAMA DISINI ---
+            // Cek apakah 'data' benar-benar ada sebelum cek length
+            if (!resData.data || !Array.isArray(resData.data)) {
+                console.error("Respons server aneh:", resData);
+                resultsDiv.innerHTML = `<p style="color:red;">Error Sistem: Data tidak diterima dengan benar.</p>`;
+                return;
+            }
+
+            resultsDiv.innerHTML = ''; 
+
+            if (resData.data.length === 0) {
+                resultsDiv.innerHTML = '<p>Tidak ditemukan paper dengan kata kunci tersebut.</p>';
+                return;
+            }
+
+            // Loop hasil (sisanya sama seperti sebelumnya)
+            resData.data.forEach(paper => {
+                const paperCard = document.createElement('div');
+                paperCard.style.border = '1px solid #eee';
+                paperCard.style.padding = '10px';
+                paperCard.style.marginBottom = '10px';
+                paperCard.style.borderRadius = '5px';
+                
+                paperCard.innerHTML = `
+                    <b>${paper.title}</b><br>
+                    <small style="color:#555;">${paper.authors} (${paper.year}) - ${paper.venue}</small><br>
+                    <small>Cited by: ${paper.citation_count}</small><br>
+                    <div style="margin-top:5px; font-family:monospace; background:#f0f0f0; padding:5px; font-size:0.85rem;">
+                        ${paper.citation_apa}
+                    </div>
+                    <div style="margin-top:5px;">
+                        ${paper.pdf_url ? `<a href="${paper.pdf_url}" target="_blank" style="font-size:0.8rem;">[Buka PDF]</a>` : ''}
+                        <button onclick="copyToClipboard('${paper.citation_apa.replace(/'/g, "\\'")}')" style="padding:2px 8px; font-size:0.8rem; margin-left:5px;">Salin APA</button>
+                    </div>
+                `;
+                resultsDiv.appendChild(paperCard);
+            });
+
+        } catch (error) {
+            console.error(error);
+            resultsDiv.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+        }
+    }
+    
+
+        async function exportToWord() {
+        const contentDiv = document.getElementById('result');
+        
+        // Ambil judul untuk nama file
+        const judul = document.getElementById('judul').value || "Draft_Skripsi";
+        
+        // Bersihkan nama file (hapus karakter aneh)
+        const safeFilename = judul.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+        // Ambil isi teks (innerText agar bersih dari tag HTML)
+        // Catatan: Karena parser backend mengharapkan Markdown, kita harus
+        // # memastikan contentDiv berisi teks mentah atau kita konversi HTML ke Markdown.
+        // # Untuk simplifikasi MVP, kita kirim innerText (tanpa format bold).
+        // # UNTUK FORMAT BAKU: Gunakan data mentah dari variabel global jika Anda simpannya.
+        if(!currentDraftMarkdown) {
+            alert("Generate tulisan dulu!");
+            return;
+        }
+
+        if(contentDiv.innerText.includes("Hasil tulisan akan muncul")) {
+            alert("Belum ada tulisan untuk di-export!");
+            return;
+        }
+
+        try {
+            // Karena innerText hilang format bold, kita perlu cara lain jika ingin bold tahan.
+            // Cara terbaik untuk MVP: Kita kirim kembali prompt ke server untuk generate ulang? 
+            // Tidak lama. Mari kita coba kirim innerText dulu (tanpa bold).
+            const textContent = contentDiv.innerText;
+
+            const response = await fetch('http://localhost:8000/export-word', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: textContent,
+                    filename: safeFilename
+                })
+            });
+
+            if(!response.ok) throw new Error("Gagal export");
+
+            // Trigger download browser
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${safeFilename}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+        } catch (error) {
+            alert("Error: " + error.message);
+        }
+    }
+
+
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Sitasi berhasil disalin!");
+        });
+    }
+
+    async function generateDraft() {
+            const jenis = document.getElementById('jenis_dokumen').value;
+            const judul = document.getElementById('judul').value;
+            const bab = document.getElementById('bab').value; // Contoh: "Bab 1 Pendahuluan..."
+            const kata_kunci = document.getElementById('kata_kunci').value;
+
+            if(!judul) { alert("Isi judul dulu!"); return; }
+
+            const btn = document.getElementById('btn-generate');
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            btn.innerText = "Menulis...";
+            status.innerText = "Sedang menulis bab ini...";
+            result.innerText = "";
+
+            try {
+                const response = await fetch('http://localhost:8000/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jenis_dokumen: jenis,
+                        judul: judul,
+                        bab: bab,
+                        kata_kunci: kata_kunci,
+                        gaya_bahasa: "Formal"
+                    })
+                });
+
+                const resData = await response.json();
+                
+                // SIMPAN HASIL KE VARIABEL GLOBAL (DIKUMULASI)
+                // Kita pakai 'bab' sebagai Key agar Bab 1, Bab 2 tidak bertabrakan
+                savedChapters[bab] = resData.data; 
+
+                // Tampilkan di layar (hanya bab terakhir)
+                let formattedText = resData.data
+                    .replace(/### (.*?)/g, '<h3>$1</h3>')
+                    .replace(/## (.*?)/g, '<h2>$1</h2>')
+                    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                    .replace(/\n/g, '<br>');
+                
+                result.innerHTML = formattedText + "<br><br><i>Bab ini telah tersimpan memori untuk gabungan export.</i>";
+                status.innerText = `Bab tersimpan. Total bab di memori: ${Object.keys(savedChapters).length}`;
+
+                updateChapterListUI(); // Update daftar bab di layar
+
+            } catch (error) {
+                console.error(error);
+                status.innerText = "Error: " + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "🚀 Generate Draft";
+            }
+        }
+
+        // Fungsi Export Lengkap (Update: Mengirim semua savedChapters)
+        async function exportFullDocument() {
+            const judul = document.getElementById('judul').value || "Skripsi_Lengkap";
+            const safeFilename = judul.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            // Cek apakah ada bab tersimpan
+            if(Object.keys(savedChapters).length === 0) {
+                alert("Belum ada bab yang digenerate. Generate bab minimal satu kali dulu.");
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/export-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: judul,
+                        chapters: savedChapters // Mengirim SEMUA bab yang tersimpan
+                    })
+                });
+
+                if(!response.ok) throw new Error("Gagal export");
+
+                // Trigger download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${safeFilename}_Lengkap.docx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        }
+
+        // Helper: Menampilkan daftar bab yang sudah tersimpan (UI Tambahan)
+        function updateChapterListUI() {
+            const container = document.getElementById('chapter-list-display');
+            if(container) {
+                container.innerHTML = Object.keys(savedChapters).map(b => `<li>✅ ${b}</li>`).join('');
+            }
+        }
+    </script>
+</body>
+</html>

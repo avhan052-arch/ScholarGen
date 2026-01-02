@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarGen - AI Thesis Generator</title>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --secondary: #64748b;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* --- AUTH PAGE (Google Only) --- */
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 90vh;
+        }
+
+        .auth-card {
+            background: var(--bg-card);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px; /* Sedikit lebih lebar agar muat tombol google */
+            text-align: center;
+        }
+
+        .auth-logo { font-size: 3rem; color: var(--primary); margin-bottom: 10px; }
+        .auth-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+        .auth-subtitle { color: var(--text-muted); margin-bottom: 30px; font-size: 0.95rem; }
+
+        /* Styling khusus container Google Button agar rapi */
+        .g-signin-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        /* --- DASHBOARD COMPONENTS --- */
+        .user-nav {
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            color: white;
+            padding: 24px;
+            border-radius: var(--radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .user-info h2 { margin: 0; font-size: 1.25rem; }
+        .user-info p { margin: 4px 0 0 0; opacity: 0.9; font-size: 0.9rem; }
+
+        .credit-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 700;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 12px;
+        }
+        
+        .btn-logout {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .btn-logout:hover { background: rgba(255,255,255,0.3); }
+
+        /* Cards Generic */
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+        }
+
+        .card-header {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 16px;
+        }
+        .card-header h3 { margin: 0; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+
+        /* Inputs & Forms */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.9rem; color: var(--text-muted); }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: all 0.2s;
+            background: #fff;
+            color: var(--text-main);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .btn-secondary { background: white; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #f8fafc; border-color: var(--secondary); }
+
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; width: auto; padding: 8px 16px; font-size: 0.85rem; }
+
+        .btn:disabled { background: #cbd5e1; cursor: not-allowed; transform: none; }
+
+        /* Reference List */
+        .ref-list { max-height: 400px; overflow-y: auto; }
+        
+        .ref-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .ref-item:hover { border-color: var(--primary); background: #fdfeff; }
+        
+        .ref-checkbox {
+            width: 20px; height: 20px;
+            margin-top: 4px;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+        
+        .ref-content h4 { margin: 0 0 4px 0; font-size: 1rem; color: var(--text-main); }
+        .ref-content p { margin: 0 0 6px 0; font-size: 0.9rem; color: var(--secondary); }
+        .ref-meta { font-size: 0.8rem; color: var(--text-muted); display: inline-block; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; }
+
+        /* Result / Editor */
+        .editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .result-paper {
+            min-height: 300px;
+            padding: 40px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+        }
+
+        /* Container Utama Modal */
+.modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+}
+.modal.open { opacity: 1; pointer-events: all; }
+
+/* Kotak Konten Modal */
+.modal-content {
+    background: white;
+    width: 90%; max-width: 450px;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    transform: scale(0.95);
+    transition: transform 0.3s;
+    
+    /* --- TAMBAHKAN KODE INI AGAR BISA SCROLL --- */
+    display: flex;            /* Aktifkan flexbox */
+    flex-direction: column;   /* Susun vertikal (Header-Isi-Button) */
+    max-height: 90vh;         /* Batasi tinggi modal maksimal 90% layar */
+}
+.modal.open .modal-content { transform: scale(1); }
+
+/* Area Scrollable (Isi Tengah) */
+.modal-scroll-area {
+    overflow-y: auto;        /* Aktifkan scroll vertikal */
+    flex: 1;                 /* Ambil ruang sisa antara header dan footer */
+    padding: 0 20px 20px 20px; /* Padding sesuaikan dengan konten */
+}
+
+/* Styling khusus untuk Zoom Image Overlay */
+#zoom-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 10001;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    cursor: zoom-out;
+    padding: 20px;
+}
+#zoom-overlay img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+
+        .hidden { display: none !important; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .user-nav { flex-direction: column; text-align: center; gap: 16px; }
+            .credit-badge { width: 100%; justify-content: center; }
+            .result-paper { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- 1. AUTH VIEW (GOOGLE ONLY) -->
+        <div id="auth-view" class="auth-container">
+            <div class="auth-card">
+                <div class="auth-logo"><i class="fa-solid fa-graduation-cap"></i></div>
+                <h1 class="auth-title">ScholarGen</h1>
+                <p class="auth-subtitle">Asisten Penulisan Skripsi Berbasis AI.<br>Masuk untuk memulai karya Anda.</p>
+
+                <!-- TOMBOL LOGIN GOOGLE -->
+                <div class="g-signin-container">
+                    <!-- Data Client ID Wajib Diisi -->
+                    <div id="g_id_onload"
+                         data-client_id="483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
+                         data-context="signin"
+                         data-ux_mode="popup"
+                         data-callback="handleGoogleCredentialResponse"
+                         data-auto_prompt="false">
+                    </div>
+
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-shape="rectangular"
+                         data-theme="outline"
+                         data-text="sign_in_with"
+                         data-size="large"
+                         data-logo_alignment="left"
+                         data-width="100%">
+                    </div>
+                </div>
+                <!-- END GOOGLE BUTTON -->
+            </div>
+        </div>
+
+        <!-- 2. DASHBOARD VIEW -->
+        <div id="dashboard-view" class="hidden">
+            
+            <!-- Navbar User -->
+            <div class="user-nav">
+                <div class="user-info">
+                    <h2 id="welcome-text">👋 Selamat Datang!</h2>
+                    <p>Generate karya ilmiah dengan referensi nyata.</p>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <div class="credit-badge">
+                        <i class="fa-solid fa-coins"></i>
+                        <span id="user-credits">0</span> Kredit
+                        <button onclick="openTopUpModal()" class="btn-warning" style="border-radius: 20px; margin-left: 8px; padding: 4px 10px; font-weight: bold;">+</button>
+                    </div>
+                    <button onclick="logout()" class="btn-logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
+            </div>
+
+            <!-- Step 1: Konfigurasi & Pencarian -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fa-solid fa-pen-nib" style="color:var(--primary)"></i> 1. Konfigurasi Topik</h3>
+                </div>
+                
+                <div class="form-grid">
+                    <div>
+                        <label>Jenis Dokumen</label>
+                        <select id="jenis_dokumen">
+                            <option value="Skripsi">Skripsi (S1)</option>
+                            <option value="Tesis">Tesis (S2)</option>
+                            <option value="Artikel Jurnal">Artikel Jurnal</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Bab Target</label>
+                        <select id="bab">
+                            <option value="Bab 1 Pendahuluan">Bab 1: Pendahuluan</option>
+                            <option value="Bab 2 Tinjauan Pustaka">Bab 2: Tinjauan Pustaka</option>
+                            <option value="Bab 3 Metodologi">Bab 3: Metodologi</option>
+                            <option value="Bab 4 Hasil dan Pembahasan">Bab 4: Hasil & Pembahasan</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label>Judul / Topik Penelitian</label>
+                <input type="text" id="judul" placeholder="Contoh: Pengaruh AI terhadap Produktivitas..." style="font-weight: 600; margin-bottom: 16px;">
+                
+                <label>Kata Kunci (Opsional)</label>
+                <input type="text" id="kata_kunci" placeholder="Contoh: Produktivitas, Teknologi, Indonesia" style="margin-bottom: 20px;">
+
+                <button onclick="searchRefs()" class="btn btn-secondary">
+                    <i class="fa-solid fa-magnifying-glass"></i> Cari Referensi Ilmiah
+                </button>
+            </div>
+
+            <!-- Step 2: Pilih Referensi -->
+            <div class="card" id="ref-section" style="opacity: 0.5; pointer-events: none; transition: 0.3s;">
+                <div class="card-header">
+                    <h3><i class="fa-solid fa-book" style="color:var(--primary)"></i> 2. Pilih Referensi</h3>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">
+                    Centang minimal 1 jurnal/artikel sebagai dasar penulisan AI.
+                </p>
+
+                <div id="search-results-list" class="ref-list">
+                    <!-- Hasil Pencarian muncul di sini -->
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fa-solid fa-inbox" style="font-size: 2rem; margin-bottom: 10px; display:block;"></i>
+                        Belum ada pencarian. Silakan cari referensi terlebih dahulu.
+                    </div>
+                </div>
+
+                <button onclick="generateDraft()" class="btn btn-primary" style="margin-top: 24px;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 2. Generate Draft (1 Kredit)
+                </button>
+            </div>
+
+            <!-- Step 3: Hasil & Editor -->
+            <div id="editor-section" class="hidden">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-file-lines" style="color:var(--primary)"></i> 3. Hasil Penulisan</h3>
+                            <small style="color: var(--text-muted);" id="current-editing-label">Belum ada bab aktif</small>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar Revisi -->
+                    <div class="editor-toolbar" style="margin-bottom: 16px;">
+                        <div style="flex: 1; display: flex; gap: 8px;">
+                            <input type="text" id="refine-instruction" placeholder="Perintah revisi AI (cth: Tambahkan paragraf...)">
+                            <button onclick="refineChapter()" class="btn-primary" style="width: auto; padding: 0 20px;">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                        </div>
+                        <button onclick="saveManualEdit()" class="btn btn-secondary" style="width: auto; padding: 0 16px;">
+                            <i class="fa-solid fa-floppy-disk"></i> Simpan Manual
+                        </button>
+                    </div>
+
+                    <!-- Area Teks -->
+                    <div id="result" contenteditable="true" class="result-paper"></div>
+
+                    <!-- Footer Actions -->
+                    <div style="margin-top: 24px; display: flex; gap: 16px; justify-content: flex-end;">
+                        <button onclick="exportFullDocument()" class="btn btn-success" style="max-width: 200px;">
+                            <i class="fa-solid fa-file-word"></i> Download Word (.docx)
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Chapter List Summary -->
+                <div class="card">
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 0.95rem;">Progres Bab:</h4>
+                    <ul id="chapter-list-display" style="list-style: none; padding: 0; display: flex; gap: 10px; flex-wrap: wrap;"></ul>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- CARI BAGIAN INI DI index.html -->
+<div id="topup-modal" class="modal">
+    <div class="modal-content">
+        <!-- 1. HEADER (Tetap Diam di Atas) -->
+        <div style="padding: 25px 25px 10px 25px; border-bottom: 1px solid #eee;">
+            <h3 style="margin:0;">Isi Saldo Kredit</h3>
+        </div>
+        
+      <!-- 2. BODY (Ini yang bisa di-scroll) -->
+        <div class="modal-scroll-area">
+            
+            <label style="font-weight: bold;">Pilih Paket</label>
+            <select id="topup-amount" style="margin-bottom: 16px;">
+                <option value="5">5 Kredit - Rp 10.000</option>
+                <option value="10">10 Kredit - Rp 25.000</option>
+                <option value="50">50 Kredit - Rp 100.000</option>
+                <option value="100">100 Kredit - Rp 250.000</option>
+            </select>
+            
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; margin-bottom: 20px; text-align: center;">
+                <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.9rem;">
+                    <i class="fa-solid fa-qrcode"></i> Scan QRIS di bawah ini
+                </p>
+                
+                <!-- Tambahkan onclick="showBigQris(this.src)" -->
+                 <!-- <div id="zoom-overlay" onclick="showBigQris(this.src)" > -->
+                     <img src="/static/qris.jpg" 
+                     alt="QRIS Payment" 
+                     style="max-width: 200px; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: zoom-in;">
+                     <br>
+                <!-- </div> -->
+                <div style="margin-top: 15px; font-weight: bold; color: var(--primary); background: #e0e7ff; padding: 8px; border-radius: 4px; display: inline-block;">
+                    Creative  Solution  
+                </div>
+                <p style="margin-top: 10px; font-size: 0.8rem; color: #64748b;">*Klik gambar untuk memperbesar</p>
+            </div>
+
+            <label>Upload Bukti Pembayaran:</label>
+            <input type="file" id="topup-proof" accept="image/*">
+        </div>
+        
+        <!-- 3. FOOTER (Tombol Tetap Diam di Bawah) -->
+        <div style="padding: 15px 25px 25px 25px; border-top: 1px solid #eee; display: flex; gap: 12px;">
+            <button onclick="closeModal()" class="btn btn-secondary">Batal</button>
+            <button onclick="submitTopUp()" class="btn btn-primary">Kirim Bukti</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. VARIABLES ---
+    let authToken = localStorage.getItem('access_token');
+    let savedChapters = {}; 
+    let currentDraftMarkdown = "";
+    let activeChapterKey = null;
+    let wsConnection = null;
+
+    // --- 2. WEBSOCKET FUNCTION ---
+    function initWebSocket(userId) {
+        if (wsConnection) { wsConnection.close(); }
+        const wsUrl = `http://localhost:8000/ws/${userId}`;
+        try {
+            wsConnection = new WebSocket(wsUrl);
+            wsConnection.onopen = function(event) { console.log("✅ WS Terhubung"); };
+            wsConnection.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'credit_update') {
+                    const creditEl = document.getElementById('user-credits');
+                    if(creditEl) creditEl.innerText = data.amount;
+                    if (data.message) {
+                        const Toast = Swal.mixin({
+                            toast: true, position: 'top-end',
+                            showConfirmButton: false, timer: 3000, timerProgressBar: true
+                        });
+                        Toast.fire({ icon: 'info', title: data.message });
+                    }
+                }
+            };
+            wsConnection.onclose = function() { wsConnection = null; };
+        } catch (e) { console.error("Gagal WS:", e); }
+    }
+
+    // --- 3. LOGOUT ---
+    function logout() {
+        Swal.fire({
+            title: 'Logout?', text: "Anda yakin ingin keluar?", icon: 'question',
+            showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b',
+            confirmButtonText: 'Ya, Logout'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                localStorage.removeItem('access_token');
+                localStorage.clear(); 
+                if (wsConnection) { wsConnection.close(); wsConnection = null; }
+                authToken = null; savedChapters = {}; activeChapterKey = null;
+                document.getElementById('auth-view').classList.remove('hidden');
+                document.getElementById('dashboard-view').classList.add('hidden');
+            }
+        });
+    }
+
+    // --- 4. AUTH CHECK ---
+    async function checkAuth() {
+        if (authToken) {
+            document.getElementById('auth-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            try {
+                const res = await fetch('/me', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                    const userData = await res.json();
+                    const welcomeEl = document.getElementById('welcome-text');
+                    if(welcomeEl && userData.email) {
+                        const username = userData.email.split('@')[0];
+                        const displayName = username.charAt(0).toUpperCase() + username.slice(1);
+                        welcomeEl.innerText = `👋 Hai, ${displayName}!`;
+                    }
+                    const creditEl = document.getElementById('user-credits');
+                    if(creditEl) creditEl.innerText = userData.credits;
+                    if (userData.id) { initWebSocket(userData.id); }
+                } else { logout(); }
+            } catch (e) { console.error(e); }
+        } else {
+            document.getElementById('auth-view').classList.remove('hidden');
+            document.getElementById('dashboard-view').classList.add('hidden');
+        }
+    }
+
+    // --- 5. GOOGLE LOGIN HANDLER ---
+    async function handleGoogleCredentialResponse(response) {
+        const googleToken = response.credential;
+        try {
+            const res = await fetch('/google-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: googleToken })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                authToken = data.access_token;
+                localStorage.setItem('access_token', authToken);
+                Swal.fire({
+                    icon: 'success', title: 'Login Berhasil', text: 'Selamat datang kembali!',
+                    timer: 1500, showConfirmButton: false
+                }).then(() => { checkAuth(); });
+            } else { throw new Error(data.detail); }
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'Login Gagal', text: error.message });
+        }
+    }
+
+    // --- 6. API HELPER ---
+    async function apiCall(endpoint, body = {}) {
+        return fetch('/' + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify(body)
+        });
+    }
+
+    // --- 7. GENERATOR LOGIC ---
+    async function generateDraft() {
+        const checkboxes = document.querySelectorAll('.ref-checkbox:checked');
+        let selectedReferences = Array.from(checkboxes).map(cb => cb.value);
+        if (selectedReferences.length === 0) return Swal.fire('Peringatan', 'Centang minimal satu referensi!', 'warning');
+
+        const data = {
+            jenis_dokumen: document.getElementById('jenis_dokumen').value,
+            judul: document.getElementById('judul').value,
+            bab: document.getElementById('bab').value,
+            kata_kunci: document.getElementById('kata_kunci').value,
+            selected_references: selectedReferences 
+        };
+        if(!data.judul) return Swal.fire('Error', 'Isi judul!', 'error');
+        
+        const btn = document.querySelector('button[onclick="generateDraft()"]');
+        const resDiv = document.getElementById('result');
+        
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI Menulis...';
+        resDiv.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;"><i class="fa-solid fa-robot"></i> Sedang menyusun draft...</div>';
+
+        try {
+            const res = await apiCall('/generate', data);
+            const json = await res.json();
+            if(!res.ok) throw new Error(json.detail);
+            activeChapterKey = data.bab;
+            savedChapters[data.bab] = json.data;
+            currentDraftMarkdown = json.data;
+            renderContent(json.data);
+            document.getElementById('editor-section').classList.remove('hidden');
+            document.getElementById('current-editing-label').innerText = `Mengedit: ${data.bab}`;
+            document.getElementById('user-credits').innerText = json.remaining_credits;
+            document.getElementById('editor-section').scrollIntoView({ behavior: 'smooth' });
+            updateChapterList();
+        } catch (err) { Swal.fire('Error', err.message, 'error'); }
+        finally { 
+            btn.disabled = false; 
+            btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 2. Generate Draft (1 Kredit)'; 
+        }
+    }
+
+    // --- 8. SEARCH LOGIC ---
+    async function searchRefs() {
+        const q = document.getElementById('judul').value;
+        const list = document.getElementById('search-results-list');
+        const refSection = document.getElementById('ref-section');
+        if(!q) return Swal.fire('Info', 'Isi judul/topik pencarian dulu!', 'info');
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fa-solid fa-circle-notch fa-spin"></i> Mencari...</div>';
+        try {
+            const res = await apiCall('/search', { query: q });
+            const json = await res.json();
+            list.innerHTML = '';
+            if(json.data.length === 0) { 
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Tidak ditemukan.</div>'; return; 
+            }
+            refSection.style.opacity = '1'; refSection.style.pointerEvents = 'all';
+            json.data.forEach((p, index) => {
+                const item = document.createElement('div');
+                item.className = 'ref-item';
+                const refData = `${p.title} (${p.year}) - ${p.authors}`;
+                item.innerHTML = `
+                    <input type="checkbox" class="ref-checkbox" value="${refData}">
+                    <div class="ref-content">
+                        <h4>${p.title}</h4>
+                        <p>${p.authors}</p>
+                        <div style="display:flex; gap:8px; margin-top:4px;">
+                            <span class="ref-meta"><i class="fa-regular fa-calendar"></i> ${p.year}</span>
+                            <span class="ref-meta"><i class="fa-solid fa-quote-right"></i> ${p.citation_count}</span>
+                        </div>
+                    </div>`;
+                list.appendChild(item);
+            });
+        } catch (err) { 
+            list.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px;">Gagal mencari.</div>'; 
+        }
+    }
+
+    // --- 9. RENDER & EXPORT ---
+    function renderContent(markdownText) {
+        const resDiv = document.getElementById('result');
+        resDiv.innerHTML = markdownText
+            .replace(/### (.*?)/g, '<h3 style="margin-top:20px;">$1</h3>')
+            .replace(/## (.*?)/g, '<h2 style="margin-top:25px;">$1</h2>')
+            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+            .replace(/\n/g, '<br>');
+    }
+
+    async function exportFullDocument() {
+        const judul = document.getElementById('judul').value || "Skripsi";
+        if(Object.keys(savedChapters).length === 0) return Swal.fire('Info', 'Generate minimal satu bab dulu!', 'info');
+        try {
+            const res = await apiCall('/export-complete', { title: judul, chapters: savedChapters });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${judul}_Lengkap.docx`;
+            document.body.appendChild(a); a.click(); a.remove();
+        } catch (err) { 
+            Swal.fire('Gagal', 'Gagal melakukan export dokumen', 'error'); 
+        }
+    }
+
+    function updateChapterList() {
+        const list = document.getElementById('chapter-list-display');
+        list.innerHTML = Object.keys(savedChapters).map(b => 
+            `<li style="background:#ecfdf5; color:#047857; padding:4px 12px; border-radius:20px; font-size:0.85rem; border:1px solid #a7f3d0;">
+                <i class="fa-solid fa-check"></i> ${b}
+            </li>`
+        ).join('');
+    }
+
+    // --- 10. TOP UP LOGIC ---
+    function openTopUpModal() { document.getElementById('topup-modal').classList.add('open'); }
+    function closeModal() { document.getElementById('topup-modal').classList.remove('open'); }
+
+    async function submitTopUp() {
+        const amount = document.getElementById('topup-amount').value;
+        const fileInput = document.getElementById('topup-proof');
+        if (!fileInput.files.length) return Swal.fire('Info', 'Mohon upload bukti pembayaran.', 'warning');
+        const formData = new FormData();
+        formData.append("amount", amount);
+        formData.append("proof", fileInput.files[0]);
+        const btn = document.querySelector('button[onclick="submitTopUp()"]');
+        const originalText = btn.innerText;
+        btn.disabled = true; btn.innerText = "Mengirim...";
+        try {
+            const res = await fetch('/request_topup', {
+                method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` }, body: formData
+            });
+            const json = await res.json();
+            if(!res.ok) throw new Error(json.detail);
+            Swal.fire('Sukses', json.message, 'success');
+            closeModal();
+        } catch (err) { Swal.fire('Gagal', "Gagal: " + err.message, 'error'); }
+        finally { btn.disabled = false; btn.innerText = originalText; }
+    }
+
+    // --- 11. REFINE LOGIC ---
+    async function refineChapter() {
+        if (!activeChapterKey) return Swal.fire('Peringatan', 'Pilih atau generate bab terlebih dahulu!', 'warning');
+        if (!savedChapters[activeChapterKey]) return Swal.fire('Peringatan', 'Belum ada konten untuk diedit.', 'warning');
+        const instruction = document.getElementById('refine-instruction').value;
+        if (!instruction) return Swal.fire('Info', 'Masukkan perintah revisi!', 'info');
+        const btn = document.querySelector('button[onclick="refineChapter()"]');
+        const originalContent = btn.innerHTML;
+        try {
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            document.getElementById('result').innerText = "Sedang menyusun ulang...";
+            const res = await apiCall('/refine', { bab_key: activeChapterKey, current_content: savedChapters[activeChapterKey], instruction: instruction });
+            const json = await res.json();
+            if(!res.ok) throw new Error(json.detail);
+            savedChapters[activeChapterKey] = json.data;
+            currentDraftMarkdown = json.data;
+            renderContent(json.data);
+            document.getElementById('user-credits').innerText = json.remaining_credits;
+            Swal.fire('Sukses', 'Bab berhasil direvisi!', 'success');
+        } catch (err) { Swal.fire('Error', err.message, 'error'); }
+        finally { 
+            btn.disabled = false; 
+            btn.innerHTML = originalContent;
+        }
+    }
+
+    function saveManualEdit() {
+        if (!activeChapterKey) return Swal.fire('Error', 'Tidak ada bab aktif.', 'error');
+        const rawText = document.getElementById('result').innerText;
+        savedChapters[activeChapterKey] = rawText;
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end',
+            showConfirmButton: false, timer: 1500, timerProgressBar: true, icon: 'success'
+        });
+        Toast.fire({ title: 'Perubahan manual tersimpan.' });
+        updateChapterList();
+    }
+
+    // --- FUNGSI ZOOM QRIS ---
+
+function showBigQris(src) {
+    const overlay = document.getElementById('zoom-overlay');
+    
+    // --- CEK KEAMANAN: Jika elemen tidak ada, hentikan saja ---
+    if (!overlay) {
+        alert("Error: Elemen Zoom Overlay tidak ditemukan di HTML.");
+        console.error("Pastikan Anda sudah menambahkan <div id='zoom-overlay'> di file index.html");
+        return; 
+    }
+    // -------------------------------------------------
+
+    // Bersihkan gambar lama jika ada
+    overlay.innerHTML = '';
+    
+    // Buat elemen gambar baru
+    const img = document.createElement('img');
+    img.src = src;
+    
+    // Masukkan ke overlay
+    overlay.appendChild(img);
+    
+    // Tampilkan overlay
+    overlay.style.display = 'flex';
+}
+
+function hideBigQris() {
+    const overlay = document.getElementById('zoom-overlay');
+    
+    // Cek juga disini biar aman
+    if (overlay) {
+        overlay.style.display = 'none';
+        // Bersihkan DOM agar tidak berat setelah 0.3 detik
+        setTimeout(() => { overlay.innerHTML = ''; }, 300);
+    }
+}
+
+    // --- INITIALIZATION ---
+    checkAuth();
+</script>
+</body>
+</html>

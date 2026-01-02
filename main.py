@@ -307,14 +307,11 @@ def startup_db_client():
         db.commit()
         print(f"✅ Admin baru dibuat otomatis: {admin_email}")
     else:
-        # Jika user dengan email tersebut sudah ada, pastikan statusnya adalah admin
-        if not existing_admin.is_admin:
-            existing_admin.is_admin = True
-            existing_admin.hashed_password = get_password_hash(admin_password)
-            db.commit()
-            print(f"✅ User {admin_email} diupdate menjadi Admin")
-        else:
-            print(f"✅ Admin sudah ada: {admin_email}")
+        # Jika user dengan email tersebut sudah ada, pastikan statusnya adalah admin dan password diupdate
+        existing_admin.is_admin = True
+        existing_admin.hashed_password = get_password_hash(admin_password)
+        db.commit()
+        print(f"✅ User {admin_email} diupdate menjadi Admin (password diupdate)")
 
     db.close()
     start_bot()

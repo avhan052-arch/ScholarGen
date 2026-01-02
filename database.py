@@ -12,14 +12,15 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     credits = Column(Integer, default=0)
-    
+    created_at = Column(String, default="Now")  # Tambahkan field created_at
+
     # --- BARU: Kolom untuk membedakan Admin ---
-    is_admin = Column(Boolean, default=False) 
+    is_admin = Column(Boolean, default=False)
 
 class TopUpRequest(Base):
     __tablename__ = "topup_requests"

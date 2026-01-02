@@ -271,11 +271,46 @@ def migrate_database():
 @app.on_event("startup")
 def startup_db_client():
     # Migrasi tabel
-    migrate_database() 
-    
+    migrate_database()
+
     # Buat tabel user
     database.Base.metadata.create_all(bind=database.engine)
     print("✅ Database Tables Checked/Created.")
+
+    # Buat admin secara otomatis jika belum ada
+    from auth import get_password_hash
+    db = database.SessionLocal()
+
+    # Ambil email dan password admin dari environment variables atau gunakan default
+    admin_email = os.environ.get("ADMIN_EMAIL", "avhan43@gmail.com")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+    # Cek apakah admin sudah ada
+    existing_admin = db.query(database.User).filter(database.User.email == admin_email).first()
+
+    if not existing_admin:
+        # Buat admin baru
+        hashed_password = get_password_hash(admin_password)
+        new_admin = database.User(
+            email=admin_email,
+            hashed_password=hashed_password,
+            is_admin=True,
+            credits=99999  # Saldo awal untuk admin
+        )
+        db.add(new_admin)
+        db.commit()
+        print(f"✅ Admin baru dibuat otomatis: {admin_email}")
+    else:
+        # Jika user dengan email tersebut sudah ada, pastikan statusnya adalah admin
+        if not existing_admin.is_admin:
+            existing_admin.is_admin = True
+            existing_admin.hashed_password = get_password_hash(admin_password)
+            db.commit()
+            print(f"✅ User {admin_email} diupdate menjadi Admin")
+        else:
+            print(f"✅ Admin sudah ada: {admin_email}")
+
+    db.close()
     start_bot()
 
 

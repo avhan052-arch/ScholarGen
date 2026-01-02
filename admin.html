@@ -828,12 +828,33 @@
                 // --- TAMBAHKAN INI: UPDATE PENDAPATAN REALTIME ---
                 else if (msg.type === "update_revenue") {
                     const formattedRevenue = msg.total_revenue.toLocaleString('id-ID');
-                    
+
                     // Animasi kecil agar terlihat update
                     const revElement = document.getElementById('stat-revenue');
                     revElement.innerText = `Rp ${formattedRevenue}`;
                     revElement.style.color = '#166534'; // Warna hijau tua sebentar
                     setTimeout(() => { revElement.style.color = 'var(--text-main)'; }, 500);
+                }
+                // --- TAMBAHKAN INI: UPDATE TABEL USER REALTIME ---
+                else if (msg.type === "new_user") {
+                    // Tambahkan user baru ke tabel
+                    addUserToTable(msg.data);
+
+                    // Update jumlah total user di statistik
+                    const currentTotalUsers = parseInt(document.getElementById('stat-users').innerText);
+                    document.getElementById('stat-users').innerText = currentTotalUsers + 1;
+
+                    // Tampilkan notifikasi
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end',
+                        showConfirmButton: false, timer: 5000,
+                        timerProgressBar: true, icon: 'success'
+                    });
+                    Toast.fire({
+                        icon: 'success',
+                        title: `User Baru Terdaftar: ${msg.data.email}`,
+                        text: `ID: ${msg.data.id}`
+                    });
                 }
             };
 
@@ -878,6 +899,33 @@
                 statusSpan.innerText = newStatus;
                 actionsDiv.innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">Selesai</span>';
             }
+        }
+
+        // --- FUNGSI UNTUK MENAMBAHKAN USER BARU KE TABEL ---
+        function addUserToTable(userData) {
+            const tbody = document.querySelector('#users-table tbody');
+            const isDisabled = userData.is_admin ? 'disabled' : '';
+
+            const tr = document.createElement('tr');
+            tr.id = `user-row-${userData.id}`;
+
+            tr.innerHTML = `
+                <td>#${userData.id}</td>
+                <td>${userData.email} ${userData.is_admin ? '<span class="badge badge-approved">Admin</span>' : ''}</td>
+                <td style="font-weight:bold;">${userData.credits} KR</td>
+                <td>${userData.is_admin ? 'Administrator' : 'User Biasa'}</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="adjustCredit(${userData.id}, 10, 'add')">
+                        <i class="fa-solid fa-plus"></i> 10
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="adjustCredit(${userData.id}, 10, 'subtract')" ${isDisabled}>
+                        <i class="fa-solid fa-minus"></i> 10
+                    </button>
+                </td>
+            `;
+
+            // Tambahkan baris baru di awal tabel
+            tbody.insertBefore(tr, tbody.firstChild);
         }
 
         // --- FUNGSI FILTER TABEL TOP UP ---

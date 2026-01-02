@@ -110,27 +110,64 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Update pesan di Telegram
             if query.message.caption:
                 await query.edit_message_caption(
-                    caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>", 
+                    caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
                     parse_mode="HTML"
                 )
             else:
                 await query.edit_message_text(
-                    text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>", 
+                    text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
                     parse_mode="HTML"
                 )
             # Hapus tombol
             if query.message.reply_markup:
                 await query.edit_message_reply_markup(reply_markup=None)
+
+            # --- TAMBAHKAN INI: Kirim notifikasi ke pengguna ---
+            try:
+                # Ambil informasi request dari database untuk mendapatkan user_id
+                import database
+                from sqlalchemy.orm import Session
+                from sqlalchemy import create_engine
+
+                # Buat koneksi database
+                engine = create_engine("sqlite:///./skripsi.db")
+                db: Session = database.SessionLocal()
+
+                # Ambil request topup berdasarkan ID
+                topup_request = db.query(database.TopUpRequest).filter(database.TopUpRequest.id == request_id).first()
+
+                if topup_request:
+                    # Ambil user yang melakukan request
+                    user = db.query(database.User).filter(database.User.id == topup_request.user_id).first()
+                    if user:
+                        # Kirim pesan ke user
+                        status_text = "disetujui" if action == "approve" else "ditolak"
+                        user_message = f"🔔 Notifikasi Top Up\n\nStatus: Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin.\n\nTerima kasih telah menggunakan layanan kami!"
+
+                        # Kita tidak bisa mengirim pesan langsung ke user karena kita tidak menyimpan chat_id user
+                        # Tapi kita bisa mengirim notifikasi melalui WebSocket yang sudah terhubung
+                        # Kita akan mengirim notifikasi ke WebSocket user
+                        from main import manager
+                        await manager.broadcast_to_user(user.id, {
+                            "type": "topup_notification",
+                            "status": "approved" if action == "approve" else "rejected",
+                            "message": f"Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin."
+                        })
+
+            except Exception as e:
+                print(f"❌ Gagal mengirim notifikasi ke user: {e}")
+            finally:
+                db.close()
         else:
             error_msg = f"❌ Gagal: {res.text}"
             if query.message.caption:
                 await query.edit_message_caption(
-                    caption=query.message.caption + f"\n\n{error_msg}", 
+                    caption=query.message.caption + f"\n\n{error_msg}",
                     parse_mode="HTML"
                 )
             else:
                 await query.edit_message_text(
-                    text=query.message.text + f"\n\n{error_msg}", 
+                    text=query.message.text + f"\n\n{error_msg}",
                     parse_mode="HTML"
                 )
 

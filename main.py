@@ -217,6 +217,18 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
             db.refresh(new_user)
             user = new_user
             print(f"✅ Akun baru dibuat via Google: {email}")
+
+            # --- TAMBAHKAN INI ---
+            # Beritahu SEMUA ADMIN bahwa ada user baru terdaftar
+            await manager.broadcast_to_admins({
+                "type": "new_user",
+                "data": {
+                    "id": new_user.id,
+                    "email": new_user.email,
+                    "credits": new_user.credits,
+                    "is_admin": new_user.is_admin
+                }
+            })
         else:
             print(f"✅ User lama login via Google: {email}")
 

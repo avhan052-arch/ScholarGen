@@ -25,11 +25,8 @@ import time
 from scholarly import scholarly
 from database import TopUpRequest # Import model baru
 from fastapi.staticfiles import StaticFiles
-from auth import decode_access_token 
+from auth import decode_access_token, SECRET_KEY, ALGORITHM
 from bot import start_bot, notify_new_topup
-
-SECRET_KEY = "ini_kunci_rahasia_saya_123" # Copy dari auth.py
-ALGORITHM = "HS256"
 
 # Masukkan Client ID Anda di sini
 # GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"

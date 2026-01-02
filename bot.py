@@ -159,27 +159,16 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Kirim notifikasi ke admin WebSocket (untuk update tabel di admin panel)
             try:
-                import database
-                from sqlalchemy.orm import Session
-                from main import manager # Pastikan main.py tidak circular import dengan bot
+                from websocket_manager import manager
 
-                db: Session = database.SessionLocal()
-                topup_request = db.query(database.TopUpRequest).filter(database.TopUpRequest.id == request_id).first()
-
-                if topup_request:
-                    # Beritahu semua admin bahwa status request telah berubah
-                    await manager.broadcast_to_admins({
-                        "type": "update_request",
-                        "id": request_id,
-                        "new_status": "Approved" if action == "approve" else "Rejected"
-                    })
-                    print(f"✅ DEBUG: Admin notification sent for request {request_id}")
-                else:
-                    print(f"⚠️ DEBUG: Top up request {request_id} not found in database")
+                # Update all admin panels with the new status and stats
+                await manager.broadcast_topup_update(
+                    request_id,
+                    "Approved" if action == "approve" else "Rejected"
+                )
+                print(f"✅ DEBUG: Admin notification sent for request {request_id}")
             except Exception as e:
                 print(f"❌ Gagal mengirim notifikasi ke admin: {e}")
-            finally:
-                db.close()
         else:
             # Handle Error Server (500, 404, dll)
             error_msg = f"❌ Gagal: {res.text}"

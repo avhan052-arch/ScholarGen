@@ -48,61 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- CONNECTION MANAGER WEBSOCKET ---
-class ConnectionManager:
-    def __init__(self):
-        # Dictionary untuk menyimpan koneksi user berdasarkan ID mereka
-        # Contoh: { 1: [WebSocket1, WebSocket2], 2: [WebSocket3] }
-        self.active_connections: Dict[int, List[WebSocket]] = {}
-
-        # --- BARU: List khusus Admin (untuk update tabel) ---
-        self.admin_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket, user_id: int):
-        # await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-        self.active_connections[user_id].append(websocket)
-        print(f"✅ User {user_id} connected via WebSocket.")
-
-    def disconnect(self, websocket: WebSocket, user_id: int = None):
-        if user_id is not None:
-            if user_id in self.active_connections:
-                if websocket in self.active_connections[user_id]:
-                    self.active_connections[user_id].remove(websocket)
-                # Jika tidak ada koneksi tersisa untuk user ini, hapus keynya
-                if not self.active_connections[user_id]:
-                    del self.active_connections[user_id]
-            print(f"❌ User {user_id} disconnected.")
-        else:
-            # Jika tidak ada user_id, mungkin ini adalah admin websocket
-            if websocket in self.admin_connections:
-                self.admin_connections.remove(websocket)
-            print(f"❌ Admin connection closed.")
-
-        # Juga cek dan hapus dari admin connections jika ada
-        if websocket in self.admin_connections:
-            self.admin_connections.remove(websocket)
-        print(f"❌ Connection closed.")
-
-    # --- BARU: Broadcast ke SEMUA Admin ---
-    async def broadcast_to_admins(self, message: dict):
-        if self.admin_connections:
-            for connection in self.admin_connections:
-                try:
-                    await connection.send_json(message)
-                except:
-                    pass # Jika admin offline/putus, abaikan
-
-    async def broadcast_to_user(self, user_id: int, message: dict):
-        if user_id in self.active_connections:
-            for connection in self.active_connections[user_id]:
-                try:
-                    await connection.send_json(message)
-                except:
-                    pass # Jika koneksi putus, abaikan
-
-manager = ConnectionManager()   
+from websocket_manager import manager   
 
 @app.websocket("/ws/admin")
 async def ws_admin_endpoint(websocket: WebSocket):
@@ -570,9 +516,6 @@ async def admin_approve_topup(request_id: int, admin: database.User = Depends(ge
          # Ini penting untuk memastikan user.credits mencerminkan nilai di file DB
         db.refresh(user)
 
-        revenue_result = db.query(func.sum(database.TopUpRequest.price)).filter(TopUpRequest.status == "Approved").scalar()
-        current_total_revenue = revenue_result if revenue_result else 0
-
        # --- TAMBAHKAN INI ---
         # Beritahu User
         await manager.broadcast_to_user(user.id, {
@@ -581,11 +524,8 @@ async def admin_approve_topup(request_id: int, admin: database.User = Depends(ge
             "message": f"Top up sebesar {req.amount} kredit disetujui!"
         })
 
-        # Beritahu SEMUA ADMIN (Realtime Update Widget)
-        await manager.broadcast_to_admins({
-            "type": "update_revenue",
-            "total_revenue": current_total_revenue
-        })
+        # Update all admin panels with the new status and stats
+        await manager.broadcast_topup_update(request_id, "Approved")
         # -------------------
         return {"message": "Top Up Disetujui", "new_balance": user.credits}
     except HTTPException:
@@ -609,13 +549,17 @@ async def admin_reject_topup(request_id: int, admin: database.User = Depends(get
 
         req.status = "Rejected"
         db.commit()
-         # --- TAMBAHKAN INI ---
+
+        # --- TAMBAHKAN INI ---
         # Kirim notifikasi ke user yang request
         await manager.broadcast_to_user(req.user_id, {
             "type": "topup_notification",
             "status": "rejected",
             "message": "Maaf, permintaan Top Up Anda ditolak oleh Admin."
         })
+
+        # Update all admin panels with the new status and stats
+        await manager.broadcast_topup_update(request_id, "Rejected")
         # -------------------
 
         return {"message": "Top Up Ditolak"}

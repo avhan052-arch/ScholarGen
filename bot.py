@@ -8,37 +8,28 @@ from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQuer
 
 # --- KONFIGURASI BOT ---
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-ID_FILE = "admin_chat_id.txt"  # File untuk menyimpan ID Admin
+ID_FILE = "admin_chat_id.txt"
 
 # --- KONFIGURASI ADMIN (AUTO LOGIN) ---
-# Masukkan email dan password admin yang sudah Anda buat
 ADMIN_EMAIL = "avhan43@gmail.com"
-ADMIN_PASSWORD = "123" 
+ADMIN_PASSWORD = "123"
 
-# Token Admin (Akan terisi otomatis saat startup atau saat refresh)
-BOT_ADMIN_TOKEN = None 
-
-# URL Aplikasi Anda
+BOT_ADMIN_TOKEN = None
 BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:8000")
 
 # --- FUNGSI LOGIN OTOMATIS ---
 def refresh_admin_token():
-    """Login ke FastAPI untuk mendapatkan Token Admin baru"""
     global BOT_ADMIN_TOKEN
-    
     print("🔄 Mencoba mengambil Token Admin otomatis...")
-    
     try:
-        # Panggil endpoint login admin
         res = requests.post(f"{BASE_URL}/admin/token", data={
             "username": ADMIN_EMAIL,
             "password": ADMIN_PASSWORD
         })
-        
         if res.ok:
             data = res.json()
             BOT_ADMIN_TOKEN = data.get("access_token")
-            print(f"✅ Token Admin berhasil didapatkan! (Expires in 30 menit)")
+            print(f"✅ Token Admin berhasil didapatkan!")
             return True
         else:
             print(f"❌ Gagal Login Admin: {res.text}")
@@ -58,16 +49,11 @@ if os.path.exists(ID_FILE):
             print("⚠️ File ID rusak, silakan ketik /start lagi.")
 
 # --- FUNGSI HANDLER TELEGRAM ---
-
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menyimpan Chat ID Admin saat mereka mengetik /start"""
     global ADMIN_CHAT_ID
     ADMIN_CHAT_ID = update.effective_message.chat_id
-    
-    # SIMPAN ID KE FILE SUPAYA TIDAK HILANG SAAT RESTART
     with open(ID_FILE, "w") as f:
         f.write(str(ADMIN_CHAT_ID))
-    
     await update.message.reply_text(
         f"✅ Bot terhubung! ID Anda: {ADMIN_CHAT_ID}.\nID ini telah disimpan otomatis."
     )
@@ -75,11 +61,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menangani klik tombol Approve/Reject"""
     query = update.callback_query
-    await query.answer() 
+    await query.answer() # Acknowledge dulu biar loading berhenti
 
-    action, req_id = query.data.split("_")
-    request_id = int(req_id)
+    # 1. Validasi Data
+    if not query.data:
+        print("⚠️ Callback data kosong.")
+        return
 
+    try:
+        action, req_id = query.data.split("_")
+        request_id = int(req_id)
+    except ValueError:
+        print(f"❌ Error format data: {query.data}")
+        await query.edit_message_text(text="⚠️ Error: Format data tombol tidak valid.")
+        return
+
+    # 2. Tentukan Endpoint
     if action == "approve":
         endpoint = f"{BASE_URL}/admin/approve_topup/{request_id}"
         text_success = "✅ Top Up Disetujui!"
@@ -88,26 +85,24 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_success = "❌ Top Up Ditolak!"
 
     try:
-        # 1. Coba kirim request
+        # 3. Kirim Request ke Server
         res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
 
-        # 2. Jika Error 401 (Token Kadaluarsa), Lakukan Auto Login dan Retry
+        # 4. Handle jika Token Expired (401)
         if res.status_code == 401:
             print("⚠️ Token Admin kadaluarsa. Melakukan Auto-Login...")
-            
-            # Refresh Token
             if refresh_admin_token():
-                # Coba ulang request dengan token baru
                 res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
             else:
-                await query.edit_message_caption(
-                    caption=query.message.caption + f"\n\n❌ GAGAL: Token Admin invalid & Login Gagal.", 
-                    parse_mode="HTML"
-                )
+                msg = "❌ GAGAL: Token invalid & Login Gagal."
+                if query.message.caption:
+                    await query.edit_message_caption(caption=query.message.caption + f"\n\n{msg}")
+                else:
+                    await query.edit_message_text(text=query.message.text + f"\n\n{msg}")
                 return
 
+        # 5. Update Pesan jika Sukses
         if res.ok:
-            # Update pesan di Telegram
             if query.message.caption:
                 await query.edit_message_caption(
                     caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
@@ -118,81 +113,55 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
                     parse_mode="HTML"
                 )
+            
             # Hapus tombol
             if query.message.reply_markup:
                 await query.edit_message_reply_markup(reply_markup=None)
 
-            # --- TAMBAHKAN INI: Kirim notifikasi ke pengguna ---
+            # 6. Kirim Notifikasi ke User via WebSocket
             try:
-                # Ambil informasi request dari database untuk mendapatkan user_id
                 import database
                 from sqlalchemy.orm import Session
                 from sqlalchemy import create_engine
+                from main import manager # Pastikan main.py tidak circular import dengan bot
 
-                # Buat koneksi database
                 engine = create_engine("sqlite:///./skripsi.db")
                 db: Session = database.SessionLocal()
-
-                # Ambil request topup berdasarkan ID
                 topup_request = db.query(database.TopUpRequest).filter(database.TopUpRequest.id == request_id).first()
 
                 if topup_request:
-                    # Ambil user yang melakukan request
                     user = db.query(database.User).filter(database.User.id == topup_request.user_id).first()
                     if user:
-                        # Kirim pesan ke user
                         status_text = "disetujui" if action == "approve" else "ditolak"
-                        user_message = f"🔔 Notifikasi Top Up\n\nStatus: Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin.\n\nTerima kasih telah menggunakan layanan kami!"
-
-                        # Kita tidak bisa mengirim pesan langsung ke user karena kita tidak menyimpan chat_id user
-                        # Tapi kita bisa mengirim notifikasi melalui WebSocket yang sudah terhubung
-                        # Kita akan mengirim notifikasi ke WebSocket user
-                        from main import manager
                         await manager.broadcast_to_user(user.id, {
                             "type": "topup_notification",
                             "status": "approved" if action == "approve" else "rejected",
                             "message": f"Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin."
                         })
-
             except Exception as e:
                 print(f"❌ Gagal mengirim notifikasi ke user: {e}")
             finally:
                 db.close()
         else:
+            # Handle Error Server (500, 404, dll)
             error_msg = f"❌ Gagal: {res.text}"
             if query.message.caption:
-                await query.edit_message_caption(
-                    caption=query.message.caption + f"\n\n{error_msg}",
-                    parse_mode="HTML"
-                )
+                await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
             else:
-                await query.edit_message_text(
-                    text=query.message.text + f"\n\n{error_msg}",
-                    parse_mode="HTML"
-                )
+                await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
     except Exception as e:
-        # Cek apakah error ini cuma "Message is not modified"
+        # Handle Error Umum (Koneksi, dll)
         error_str = str(e).lower()
         if "not modified" in error_str:
-            # Jika iya, abaikan saja (mungkin admin double-click)
-            print("ℹ️ Pesan sudah diupdate sebelumnya (Double Click), skip update pesan.")
-            return
-
-        # Jika error lainnya, tampilkan error biasa
+            return # Biasanya double click, abaikan
+        
+        print(f"❌ Error pada button_click: {e}")
         error_msg = f"❌ Error: {str(e)}"
         if query.message.caption:
-            await query.edit_message_caption(
-                caption=query.message.caption + f"\n\n{error_msg}", 
-                parse_mode="HTML"
-            )
+            await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
         else:
-            await query.edit_message_text(
-                text=query.message.text + f"\n\n{error_msg}", 
-                parse_mode="HTML"
-            )
-
-# --- FUNGSI NOTIFIKASI ---
+            await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
 def notify_new_topup(amount, user_email, image_filename, request_id):
     """Kirim notifikasi ke Telegram saat ada top up baru"""
@@ -201,20 +170,19 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
         print("SILAKAN BUKA TELEGRAM -> CARI BOT -> KETIK /start")
         return
 
-    # 1. Path langsung ke file di komputer
     file_path = f"uploads/{image_filename}"
 
-    # 2. Tombol Inline Keyboard
     keyboard = [
         [
             InlineKeyboardButton("✅ Setujui", callback_data=f"approve_{request_id}"),
             InlineKeyboardButton("❌ Tolak", callback_data=f"reject_{request_id}")
         ]
     ]
-    # Pastikan reply_markup adalah string JSON
-    reply_markup = InlineKeyboardMarkup(keyboard).to_dict()
+    
+    # PERBAIKAN DI SINI: Gunakan variabel yang benar
+    reply_markup_dict = InlineKeyboardMarkup(keyboard).to_dict()
+    reply_markup_str = json.dumps(reply_markup_dict)
 
-    # 3. Pesan Caption
     caption = (
         f"🔔 <b>Request Top Up Baru!</b>\n\n"
         f"👤 User: <code>{user_email}</code>\n"
@@ -223,71 +191,47 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
     )
 
     try:
-        # 4. Buka file
         with open(file_path, 'rb') as photo_file:
-        
-            # --- PERBAIKAN REPLY MARKUP ---
-            reply_markup_dict = InlineKeyboardMarkup(keyboard).to_dict()
-            reply_markup_str = json.dumps(reply_markup_dict) # <--- Ubah dict jadi string
-
-            # Data Payload
             data_payload = {
                 "chat_id": str(ADMIN_CHAT_ID),
                 "caption": caption,
                 "parse_mode": "HTML",
-                "reply_markup": reply_markup_str # <--- Kirim versi String-nya
+                "reply_markup": reply_markup_str 
             }
-            
-            # Files Payload
             files_payload = {
                 "document": (image_filename, photo_file)
             }
 
-            # Kirim request
             response = requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
                 data=data_payload,
                 files=files_payload
             )
-        
             if response.status_code == 200:
-                print("✅ Notifikasi (Binary File) BERHASIL dikirim!")
+                print("✅ Notifikasi BERHASIL dikirim!")
             else:
                 print(f"❌ Gagal mengirim: {response.text}")
-
     except FileNotFoundError:
         print("❌ GAGAL: File bukti tidak ditemukan di folder uploads!")
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# --- FUNGSI STARTUP ---
-
 def run_polling():
     """Fungsi ini dijalankan di thread terpisah"""
-    
-    # 1. Lakukan Login Otomatis saat bot start
     refresh_admin_token()
-
-    # 2. Jalankan Bot
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Registrasi Handler
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(button_click))
     
-    # Jalankan polling
     print("🤖 Telegram Bot berjalan di background...")
-    # --- TAMBAHKAN BLOK INI ---
-    # Membuat Event Loop baru yang terpisah untuk Thread Bot ini
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    # ---------------------------
-    # application.run_polling()
+    
+    # PERBAIKAN DI SINI: Jangan buat manual loop, biarkan run_polling yang handle
     try:
         application.run_polling()
     except Exception as e:
         print(f"❌ Error di Bot: {e}")
-
 
 def start_bot():
     bot_thread = threading.Thread(target=run_polling, daemon=True)

@@ -157,32 +157,27 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as markup_error:
                 print(f"❌ DEBUG: Error removing reply markup: {markup_error}")
 
-            # 6. Kirim Notifikasi ke User via WebSocket
+            # Kirim notifikasi ke admin WebSocket (untuk update tabel di admin panel)
             try:
                 import database
                 from sqlalchemy.orm import Session
-                from sqlalchemy import create_engine
                 from main import manager # Pastikan main.py tidak circular import dengan bot
 
-                engine = create_engine("sqlite:///./skripsi.db")
                 db: Session = database.SessionLocal()
                 topup_request = db.query(database.TopUpRequest).filter(database.TopUpRequest.id == request_id).first()
 
                 if topup_request:
-                    user = db.query(database.User).filter(database.User.id == topup_request.user_id).first()
-                    if user:
-                        status_text = "disetujui" if action == "approve" else "ditolak"
-                        print(f"📡 DEBUG: Sending notification to user {user.id}: Top up {status_text}")
-                        await manager.broadcast_to_user(user.id, {
-                            "type": "topup_notification",
-                            "status": "approved" if action == "approve" else "rejected",
-                            "message": f"Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin."
-                        })
-                        print(f"✅ DEBUG: Notification sent to user {user.id}")
+                    # Beritahu semua admin bahwa status request telah berubah
+                    await manager.broadcast_to_admins({
+                        "type": "update_request",
+                        "id": request_id,
+                        "new_status": "Approved" if action == "approve" else "Rejected"
+                    })
+                    print(f"✅ DEBUG: Admin notification sent for request {request_id}")
                 else:
                     print(f"⚠️ DEBUG: Top up request {request_id} not found in database")
             except Exception as e:
-                print(f"❌ Gagal mengirim notifikasi ke user: {e}")
+                print(f"❌ Gagal mengirim notifikasi ke admin: {e}")
             finally:
                 db.close()
         else:

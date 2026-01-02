@@ -607,6 +607,9 @@
                             <button class="btn btn-primary btn-sm" onclick="resetUser(${u.id})" ${isDisabled}>
                                 <i class="fa-solid fa-rotate-left"></i> Reset
                             </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${u.email}')" ${isDisabled}>
+                                <i class="fa-solid fa-trash"></i> Hapus
+                            </button>
                         </td>
                     </tr>
                 `;
@@ -789,6 +792,37 @@
             }
         }
 
+        async function deleteUser(userId, userEmail) {
+            const result = await Swal.fire({
+                title: 'Hapus User?',
+                text: `Anda yakin ingin menghapus user ${userEmail}? Tindakan ini tidak dapat dibatalkan.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/delete_user/${userId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+
+                    if(res.ok) {
+                        Swal.fire('Berhasil!', 'User berhasil dihapus.', 'success');
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus user.', 'error');
+                }
+            }
+        }
+
         function showImage(src) {
             const modal = document.getElementById('img-modal');
             document.getElementById('preview-img').src = src;
@@ -954,6 +988,12 @@
                     </button>
                     <button class="btn btn-danger btn-sm" onclick="adjustCredit(${userData.id}, 10, 'subtract')" ${isDisabled}>
                         <i class="fa-solid fa-minus"></i> 10
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="resetUser(${userData.id})" ${isDisabled}>
+                        <i class="fa-solid fa-rotate-left"></i> Reset
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteUser(${userData.id}, '${userData.email}')" ${isDisabled}>
+                        <i class="fa-solid fa-trash"></i> Hapus
                     </button>
                 </td>
             `;

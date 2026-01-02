@@ -712,6 +712,39 @@ async def reset_user_credits(
     finally:
         db.close()
 
+# 7. Aksi Admin: Delete User
+@app.delete("/admin/delete_user/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin: database.User = Depends(get_current_admin_user),
+    db: Session = Depends(auth.get_db)
+):
+    try:
+        user = db.query(database.User).filter(database.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+        # Cek apakah user yang akan dihapus adalah admin
+        if user.is_admin:
+            raise HTTPException(status_code=400, detail="Tidak dapat menghapus admin")
+
+        # Hapus user dari database
+        db.delete(user)
+        db.commit()
+
+        return {"message": "User berhasil dihapus"}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"❌ Error di admin delete user: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat menghapus user"
+        )
+    finally:
+        db.close()
+
 # Fungsi untuk mengambil struktur berdasarkan input user
 # Helper: Struktur Skripsi Baku
 def get_structured_instruction(jenis, bab):

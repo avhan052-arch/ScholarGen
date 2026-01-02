@@ -366,6 +366,7 @@
                     <div>
                         <label>Jenis Dokumen</label>
                         <select id="jenis_dokumen">
+                            <option value="Proposal">Proposal</option>
                             <option value="Skripsi">Skripsi (S1)</option>
                             <option value="Tesis">Tesis (S2)</option>
                             <option value="Artikel Jurnal">Artikel Jurnal</option>
@@ -472,10 +473,10 @@
             
             <label style="font-weight: bold;">Pilih Paket</label>
             <select id="topup-amount" style="margin-bottom: 16px;">
-                <option value="5">5 Kredit - Rp 10.000</option>
-                <option value="10">10 Kredit - Rp 25.000</option>
-                <option value="50">50 Kredit - Rp 100.000</option>
-                <option value="100">100 Kredit - Rp 250.000</option>
+                <option value="5">5 Kredit - Rp 15.000</option>
+                <option value="10">10 Kredit - Rp 35.000</option>
+                <option value="50">50 Kredit - Rp 150.000</option>
+                <option value="100">100 Kredit - Rp 300.000</option>
             </select>
             
             <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; margin-bottom: 20px; text-align: center;">
@@ -519,29 +520,71 @@
     // --- 2. WEBSOCKET FUNCTION ---
     function initWebSocket(userId) {
         if (wsConnection) { wsConnection.close(); }
-        const wsUrl = `http://localhost:8000/ws/${userId}`;
+        const wsUrl = `wss://scholar-gen.up.railway.app/ws/${userId}`;
         try {
             wsConnection = new WebSocket(wsUrl);
             wsConnection.onopen = function(event) { console.log("✅ WS Terhubung"); };
+
             wsConnection.onmessage = function(event) {
                 const data = JSON.parse(event.data);
+
+                // 1. Handle Update Saldo (Success)
                 if (data.type === 'credit_update') {
                     const creditEl = document.getElementById('user-credits');
                     if(creditEl) creditEl.innerText = data.amount;
-                    if (data.message) {
-                        const Toast = Swal.mixin({
-                            toast: true, position: 'top-end',
-                            showConfirmButton: false, timer: 3000, timerProgressBar: true
-                        });
-                        Toast.fire({ icon: 'info', title: data.message });
+
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end',
+                        showConfirmButton: false, timer: 3000, timerProgressBar: true
+                    });
+
+                    // Gunakan message dari server jika ada, default: "Saldo bertambah"
+                    const msg = data.message || "Saldo berhasil ditambahkan!";
+                    Toast.fire({ icon: 'success', title: msg });
+                }
+
+                // --- 2. TAMBAHKAN INI: Handle Notifikasi Top Up (Rejection/Approval) ---
+                else if (data.type === 'topup_notification') {
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end',
+                        showConfirmButton: false, timer: 5000, timerProgressBar: true
+                    });
+
+                    if (data.status === 'rejected') {
+                        // Tampilkan notifikasi Merah (Error)
+                        Toast.fire({ icon: 'error', title: data.message });
+                    } else if (data.status === 'approved') {
+                        // (Opsional) Fallback jika admin approve lewat cara lain yang belum diketahui
+                        Toast.fire({ icon: 'success', title: data.message });
                     }
                 }
+                // ------------------------------------------------------------------
             };
+
             wsConnection.onclose = function() { wsConnection = null; };
         } catch (e) { console.error("Gagal WS:", e); }
     }
 
     // --- 3. LOGOUT ---
+ // Fungsi ini untuk Logout Otomatis (Sesi Habis) - TANPA Konfirmasi
+    function forceLogout() {
+        localStorage.removeItem('access_token');
+        localStorage.clear();
+        if (wsConnection) { wsConnection.close(); wsConnection = null; }
+        authToken = null; savedChapters = {}; activeChapterKey = null;
+        
+        // Pindah ke halaman Login
+        document.getElementById('auth-view').classList.remove('hidden');
+        document.getElementById('dashboard-view').classList.add('hidden');
+        
+        // Tampilkan pesan informatif
+        const Toast = Swal.mixin({
+            toast: true, position: 'top', showConfirmButton: false, timer: 3000
+        });
+        Toast.fire({ icon: 'warning', title: 'Sesi Habis. Silakan Login Ulang.' });
+    }
+
+    // Fungsi ini untuk Tombol Logout Manual - DENGAN Konfirmasi
     function logout() {
         Swal.fire({
             title: 'Logout?', text: "Anda yakin ingin keluar?", icon: 'question',
@@ -549,12 +592,18 @@
             confirmButtonText: 'Ya, Logout'
         }).then((result) => {
             if (result.isConfirmed) {
+                // Panggil fungsi bersih-bersih
                 localStorage.removeItem('access_token');
                 localStorage.clear(); 
                 if (wsConnection) { wsConnection.close(); wsConnection = null; }
                 authToken = null; savedChapters = {}; activeChapterKey = null;
+                
+                // Pindah ke halaman Login
                 document.getElementById('auth-view').classList.remove('hidden');
                 document.getElementById('dashboard-view').classList.add('hidden');
+                
+                // Pesan sukses logout manual
+                Swal.fire({ icon: 'success', title: 'Berhasil Keluar', timer: 1500, showConfirmButton: false });
             }
         });
     }
@@ -579,7 +628,7 @@
                     const creditEl = document.getElementById('user-credits');
                     if(creditEl) creditEl.innerText = userData.credits;
                     if (userData.id) { initWebSocket(userData.id); }
-                } else { logout(); }
+                } else { forceLogout(); }
             } catch (e) { console.error(e); }
         } else {
             document.getElementById('auth-view').classList.remove('hidden');
@@ -611,12 +660,21 @@
     }
 
     // --- 6. API HELPER ---
+    const API_BASE_URL = "https://scholar-gen.up.railway.app"; 
     async function apiCall(endpoint, body = {}) {
-        return fetch('/' + endpoint, {
+        const res = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
             body: JSON.stringify(body)
         });
+        // --- CEK SESI HABIS (401 Unauthorized) ---
+        if (res.status === 401) {
+            console.log("⚠️ Sesi Habis (401). Melakukan Logout Otomatis.");
+            forceLogout(); // Panggil logout tanpa tanya
+            throw new Error("Unauthorized"); // Hentikan eksekusi selanjutnya
+        }
+        // ---------------------------------------
+        return res;
     }
 
     // --- 7. GENERATOR LOGIC ---
@@ -665,34 +723,98 @@
         const q = document.getElementById('judul').value;
         const list = document.getElementById('search-results-list');
         const refSection = document.getElementById('ref-section');
+        
         if(!q) return Swal.fire('Info', 'Isi judul/topik pencarian dulu!', 'info');
+        
         list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fa-solid fa-circle-notch fa-spin"></i> Mencari...</div>';
+        
         try {
+            // Panggil API
             const res = await apiCall('/search', { query: q });
+
+            // --- TAMBAHAN CEK STATUS HTTP (PENTING) ---
+            if (!res.ok) {
+                // Coba ambil pesan error dari server (JSON)
+                let errMessage = "Terjadi kesalahan saat menghubungi server.";
+                try {
+                    const errJson = await res.json();
+                    errMessage = errJson.detail || errMessage;
+                } catch (e) {
+                    // Jika respons bukan JSON (misal error HTML 500), gunakan pesan status
+                    errMessage = `Server Error (${res.status})`;
+                }
+
+                list.innerHTML = `<div style="text-align:center; color:#ef4444; padding:20px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i><br>${errMessage}
+                </div>`;
+                return; // Hentikan proses
+            }
+            // -------------------------------------------
+
             const json = await res.json();
             list.innerHTML = '';
-            if(json.data.length === 0) { 
-                list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Tidak ditemukan.</div>'; return; 
+            
+            // Pastikan format data benar
+            if (!json.data || !Array.isArray(json.data)) {
+                throw new Error("Format data dari server tidak valid.");
             }
+
+            if(json.data.length === 0) { 
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Tidak ditemukan referensi untuk topik ini.<br>Coba gunakan kata kunci lain.</div>'; 
+                // Kita enable section tetapi biarkan kosong agar user tahu pencarian sudah selesai
+                refSection.style.opacity = '1'; refSection.style.pointerEvents = 'all'; 
+                return; 
+            }
+            
             refSection.style.opacity = '1'; refSection.style.pointerEvents = 'all';
+            
             json.data.forEach((p, index) => {
                 const item = document.createElement('div');
                 item.className = 'ref-item';
-                const refData = `${p.title} (${p.year}) - ${p.authors}`;
-                item.innerHTML = `
-                    <input type="checkbox" class="ref-checkbox" value="${refData}">
-                    <div class="ref-content">
-                        <h4>${p.title}</h4>
-                        <p>${p.authors}</p>
-                        <div style="display:flex; gap:8px; margin-top:4px;">
-                            <span class="ref-meta"><i class="fa-regular fa-calendar"></i> ${p.year}</span>
-                            <span class="ref-meta"><i class="fa-solid fa-quote-right"></i> ${p.citation_count}</span>
-                        </div>
-                    </div>`;
+                
+                // Pastikan data referensi aman sebelum dirender
+                const safeTitle = p.title || "Tanpa Judul";
+                const safeAuthors = p.authors || "Unknown";
+                const safeYear = p.year || "N/A";
+                const safeCitation = p.citation_count || 0;
+                
+                // Simpan data string untuk checkbox value
+                const refData = `${safeTitle} (${safeYear}) - ${safeAuthors}`;
+
+                // Cek apakah ada link PDF
+const hasLink = p.pdf_url && p.pdf_url !== "None";
+
+// Jika ada link, buat Judul jadi tombol link. Jika tidak, judul biasa saja.
+let titleElement = `<h4>${safeTitle}</h4>`;
+
+if (hasLink) {
+    titleElement = `
+        <a href="${p.pdf_url}" target="_blank" style="text-decoration:none; color: inherit;">
+            <h4 style="color: var(--primary); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                ${safeTitle} 
+                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.7rem; opacity: 0.7;"></i>
+            </h4>
+        </a>`;
+}
+
+item.innerHTML = `
+    <input type="checkbox" class="ref-checkbox" value="${refData}">
+    <div class="ref-content">
+        ${titleElement} <!-- Masukkan variabel titleElement di sini -->
+        <p>${safeAuthors}</p>
+        <div style="display:flex; gap:8px; margin-top:4px;">
+            <span class="ref-meta"><i class="fa-regular fa-calendar"></i> ${safeYear}</span>
+            <span class="ref-meta"><i class="fa-solid fa-quote-right"></i> ${safeCitation}</span>
+            
+        </div>
+    </div>`;
                 list.appendChild(item);
             });
         } catch (err) { 
-            list.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px;">Gagal mencari.</div>'; 
+            console.error("Search Error:", err);
+            list.innerHTML = `<div style="text-align:center; color:#ef4444; padding:20px;">
+                <i class="fa-solid fa-bug"></i><br>Gagal mencari.<br><small>${err.message}</small>
+            </div>`; 
         }
     }
 

@@ -398,6 +398,16 @@
                             <p>Request Menunggu</p>
                         </div>
                     </div>
+                    <!-- KARTU BARU: PENDAPATAN -->
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #dcfce7; color: #166534;">
+            <i class="fa-solid fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-info">
+            <h3 id="stat-revenue">Rp 0</h3>
+            <p>Total Pendapatan</p>
+        </div>
+    </div>
                 </div>
             </div>
 
@@ -430,6 +440,13 @@
             <div id="view-topups" class="hidden">
                 <div class="card-header">
                     <h1>Permintaan Top Up</h1>
+                     <!-- TAMBAHKAN TOMBOL FILTER INI -->
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary btn-sm" onclick="filterTable('all')">Semua</button>
+            <button class="btn btn-sm" style="background:#fbbf24; color:#78350f;" onclick="filterTable('Pending')">Menunggu</button>
+            <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Approved')">Approved</button>
+            <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Rejected')">Rejected</button>
+        </div>
                 </div>
                 
                 <div class="card-table">
@@ -460,7 +477,7 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:8000';
+        const API_URL = 'https://scholar-gen.up.railway.app';
         let authToken = localStorage.getItem('access_token');
 
         // --- MOBILE SIDEBAR TOGGLE ---
@@ -541,20 +558,27 @@
             loadTopUps();
         }
 
-        async function loadStats() {
-            const res = await fetch(`${API_URL}/admin/users`, {
+            async function loadStats() {
+        try {
+            const res = await fetch(`${API_URL}/admin/stats`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             const data = await res.json();
-            document.getElementById('stat-users').innerText = data.users.length;
             
-            const res2 = await fetch(`${API_URL}/admin/topup_requests`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            const data2 = await res2.json();
-            const pendingCount = data2.requests.filter(r => r.status === 'Pending').length;
-            document.getElementById('stat-pending').innerText = pendingCount;
+            // Update UI User
+            document.getElementById('stat-users').innerText = data.total_users;
+            
+            // Update UI Pending
+            document.getElementById('stat-pending').innerText = data.pending_requests;
+            
+            // --- TAMBAHKAN INI: Update UI Pendapatan ---
+            // Format angka menjadi format Rupiah (misal 100000 jadi 100.000)
+            const formattedRevenue = data.total_revenue.toLocaleString('id-ID');
+            document.getElementById('stat-revenue').innerText = `Rp ${formattedRevenue}`;
+        } catch (error) {
+            console.error("Gagal load stats:", error);
         }
+    }
 
         async function loadUsers() {
             const res = await fetch(`${API_URL}/admin/users`, {
@@ -566,7 +590,7 @@
 
             json.users.forEach(u => {
                 const isDisabled = u.is_admin ? 'disabled' : '';
-                
+
                 tbody.innerHTML += `
                     <tr>
                         <td>#${u.id}</td>
@@ -579,6 +603,9 @@
                             </button>
                             <button class="btn btn-danger btn-sm" onclick="adjustCredit(${u.id}, 10, 'subtract')" ${isDisabled}>
                                 <i class="fa-solid fa-minus"></i> 10
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="resetUser(${u.id})" ${isDisabled}>
+                                <i class="fa-solid fa-rotate-left"></i> Reset
                             </button>
                         </td>
                     </tr>
@@ -731,6 +758,37 @@
             }
         }
 
+        async function resetUser(userId) {
+            const result = await Swal.fire({
+                title: 'Reset User?',
+                text: "Anda yakin ingin mereset kredit user ini ke nilai awal?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#ef4444',
+                confirmButtonText: 'Ya, Reset!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/reset_user/${userId}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+
+                    if(res.ok) {
+                        Swal.fire('Berhasil!', 'Kredit user berhasil direset.', 'success');
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat mereset user.', 'error');
+                }
+            }
+        }
+
         function showImage(src) {
             const modal = document.getElementById('img-modal');
             document.getElementById('preview-img').src = src;
@@ -742,7 +800,7 @@
 
         function initWebSocket(userId) {
             if (wsConnection) wsConnection.close();
-            const wsUrl = `ws://localhost:8000/ws/${userId}`;
+            const wsUrl = `ws://scholar-gen.up.railway.app/ws/${userId}`;
             wsConnection = new WebSocket(wsUrl);
 
             wsConnection.onopen = function(event) { console.log("✅ WS Connected"); };
@@ -768,7 +826,7 @@
         
         async function initAdminWebSocket() {
             const token = localStorage.getItem('access_token');
-            const wsUrl = `ws://localhost:8000/ws/admin?token=${token}`;
+            const wsUrl = `ws://scholar-gen.up.railway.app/ws/admin?token=${token}`;
             console.log("Admin WS Connecting...");
 
             const Toast = Swal.mixin({
@@ -800,6 +858,37 @@
                     updateRequestStatus(msg.id, msg.new_status);
                     const currentPending = parseInt(document.getElementById('stat-pending').innerText);
                     document.getElementById('stat-pending').innerText = Math.max(0, currentPending - 1);
+                }
+                // --- TAMBAHKAN INI: UPDATE PENDAPATAN REALTIME ---
+                else if (msg.type === "update_revenue") {
+                    const formattedRevenue = msg.total_revenue.toLocaleString('id-ID');
+
+                    // Animasi kecil agar terlihat update
+                    const revElement = document.getElementById('stat-revenue');
+                    revElement.innerText = `Rp ${formattedRevenue}`;
+                    revElement.style.color = '#166534'; // Warna hijau tua sebentar
+                    setTimeout(() => { revElement.style.color = 'var(--text-main)'; }, 500);
+                }
+                // --- TAMBAHKAN INI: UPDATE TABEL USER REALTIME ---
+                else if (msg.type === "new_user") {
+                    // Tambahkan user baru ke tabel
+                    addUserToTable(msg.data);
+
+                    // Update jumlah total user di statistik
+                    const currentTotalUsers = parseInt(document.getElementById('stat-users').innerText);
+                    document.getElementById('stat-users').innerText = currentTotalUsers + 1;
+
+                    // Tampilkan notifikasi
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end',
+                        showConfirmButton: false, timer: 5000,
+                        timerProgressBar: true, icon: 'success'
+                    });
+                    Toast.fire({
+                        icon: 'success',
+                        title: `User Baru Terdaftar: ${msg.data.email}`,
+                        text: `ID: ${msg.data.id}`
+                    });
                 }
             };
 
@@ -846,6 +935,55 @@
             }
         }
 
+        // --- FUNGSI UNTUK MENAMBAHKAN USER BARU KE TABEL ---
+        function addUserToTable(userData) {
+            const tbody = document.querySelector('#users-table tbody');
+            const isDisabled = userData.is_admin ? 'disabled' : '';
+
+            const tr = document.createElement('tr');
+            tr.id = `user-row-${userData.id}`;
+
+            tr.innerHTML = `
+                <td>#${userData.id}</td>
+                <td>${userData.email} ${userData.is_admin ? '<span class="badge badge-approved">Admin</span>' : ''}</td>
+                <td style="font-weight:bold;">${userData.credits} KR</td>
+                <td>${userData.is_admin ? 'Administrator' : 'User Biasa'}</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="adjustCredit(${userData.id}, 10, 'add')">
+                        <i class="fa-solid fa-plus"></i> 10
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="adjustCredit(${userData.id}, 10, 'subtract')" ${isDisabled}>
+                        <i class="fa-solid fa-minus"></i> 10
+                    </button>
+                </td>
+            `;
+
+            // Tambahkan baris baru di awal tabel
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
+        // --- FUNGSI FILTER TABEL TOP UP ---
+function filterTable(status) {
+    const rows = document.querySelectorAll('#topups-table tbody tr');
+    
+    rows.forEach(row => {
+        // Ambil status dari kolom status (span dengan id="status-{id}")
+        const statusSpan = row.querySelector(`span[id^="status-"]`);
+        if (statusSpan) {
+            const currentStatus = statusSpan.innerText;
+            
+            if (status === 'all') {
+                row.style.display = ''; // Tampilkan semua
+            } else {
+                if (currentStatus === status) {
+                    row.style.display = ''; // Tampilkan jika cocok
+                } else {
+                    row.style.display = 'none'; // Sembunyikan jika tidak cocok
+                }
+            }
+        }
+    });
+}
         // --- INIT ---
         window.onload = function() {
             checkAdminAuth(); 

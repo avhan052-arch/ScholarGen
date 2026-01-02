@@ -154,7 +154,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
     try:
         # Pastikan user_id adalah integer valid
-    user_id = int(user_id)
+        user_id = int(user_id)
     except ValueError:
         await websocket.close(code=1003)  # Invalid data
         return

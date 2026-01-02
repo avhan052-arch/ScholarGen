@@ -282,3 +282,16 @@ def start_bot():
     bot_thread = threading.Thread(target=run_polling, daemon=True)
     bot_thread.start()
     print("🤖 Telegram Bot Thread dimulai...")
+
+# Tambahkan main execution block agar bot bisa dijalankan langsung
+if __name__ == "__main__":
+    print("🚀 Menjalankan Telegram Bot secara langsung...")
+    start_bot()
+
+    # Keep the main thread alive
+    try:
+        import time
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n🛑 Bot dihentikan oleh pengguna")

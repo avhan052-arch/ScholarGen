@@ -521,7 +521,7 @@
      // --- 2. WEBSOCKET FUNCTION ---
     function initWebSocket(userId) {
         if (wsConnection) { wsConnection.close(); }
-        const wsUrl = `http://localhost:8000/ws/${userId}`;
+        const wsUrl = `https://scholar-gen.up.railway.app/app/ws/${userId}`;
         try {
             wsConnection = new WebSocket(wsUrl);
             wsConnection.onopen = function(event) { console.log("✅ WS Terhubung"); };
@@ -661,7 +661,7 @@
     }
 
     // --- 6. API HELPER ---
-    const API_BASE_URL = "https://macropodous-nelida-tangly.ngrok-free.dev"; 
+    const API_BASE_URL = "https://scholar-gen.up.railway.app"; 
     async function apiCall(endpoint, body = {}) {
         const res = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',

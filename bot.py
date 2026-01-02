@@ -18,7 +18,7 @@ ADMIN_PASSWORD = "123"
 BOT_ADMIN_TOKEN = None 
 
 # URL Aplikasi Anda
-BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:8000") 
+BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:8000")
 
 # --- FUNGSI LOGIN OTOMATIS ---
 def refresh_admin_token():

@@ -228,8 +228,10 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
             "credits": user.credits
         }
 
-    except ValueError:
-        # Token tidak valid atau kadaluarsa
+     except ValueError as e:
+        # TAMBAHKAN PRINT INI
+        print(f"❌ ERROR DETAIL GOOGLE LOGIN: {e}")
+        # ------------------
         raise HTTPException(status_code=400, detail="Token Google tidak valid")
     except Exception as e:
         print(f"Error Google Login: {e}")

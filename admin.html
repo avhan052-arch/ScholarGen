@@ -477,7 +477,7 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:8000';
+        const API_URL = 'https://scholar-gen.up.railway.app';
         let authToken = localStorage.getItem('access_token');
 
         // --- MOBILE SIDEBAR TOGGLE ---
@@ -800,7 +800,7 @@
 
         function initWebSocket(userId) {
             if (wsConnection) wsConnection.close();
-            const wsUrl = `ws://localhost:8000/ws/${userId}`;
+            const wsUrl = `ws://scholar-gen.up.railway.app/ws/${userId}`;
             wsConnection = new WebSocket(wsUrl);
 
             wsConnection.onopen = function(event) { console.log("✅ WS Connected"); };
@@ -826,7 +826,7 @@
         
         async function initAdminWebSocket() {
             const token = localStorage.getItem('access_token');
-            const wsUrl = `ws://localhost:8000/ws/admin?token=${token}`;
+            const wsUrl = `ws://scholar-gen.up.railway.app/ws/admin?token=${token}`;
             console.log("Admin WS Connecting...");
 
             const Toast = Swal.mixin({

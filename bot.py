@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import requests
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
@@ -239,6 +240,11 @@ def run_polling():
     
     # Jalankan polling
     print("🤖 Telegram Bot berjalan di background...")
+    # --- TAMBAHKAN BLOK INI ---
+    # Membuat Event Loop baru yang terpisah untuk Thread Bot ini
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    # ---------------------------
     application.run_polling()
 
 def start_bot():

@@ -245,10 +245,14 @@ def run_polling():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     # ---------------------------
-    application.run_polling()
+    # application.run_polling()
+    try:
+        application.run_polling()
+    except Exception as e:
+        print(f"❌ Error di Bot: {e}")
+
 
 def start_bot():
-    """Fungsi dipanggil oleh main.py saat startup"""
-    bot_thread = threading.Thread(target=run_polling)
-    bot_thread.daemon = True
+    bot_thread = threading.Thread(target=run_polling, daemon=True)
     bot_thread.start()
+    print("🤖 Telegram Bot Thread dimulai...")

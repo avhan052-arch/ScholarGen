@@ -273,7 +273,9 @@ def startup_db_client():
     # Buat tabel user
     database.Base.metadata.create_all(bind=database.engine)
     print("✅ Database Tables Checked/Created.")
-    start_bot()
+    # migrate_database() # Kita tambahkan ini tadi untuk fix DB
+    start_bot() # <--- Pastikan ini ada
+    uvicorn.run(app, host="0.0.0.0", port=8080)
 
 
 # 2. Setup Klien Groq

@@ -65,16 +65,22 @@ class ConnectionManager:
         self.active_connections[user_id].append(websocket)
         print(f"✅ User {user_id} connected via WebSocket.")
 
-    def disconnect(self, websocket: WebSocket, user_id: int):
-        if user_id in self.active_connections:
-            if websocket in self.active_connections[user_id]:
-                self.active_connections[user_id].remove(websocket)
-            # Jika tidak ada koneksi tersisa untuk user ini, hapus keynya
-            if not self.active_connections[user_id]:
-                del self.active_connections[user_id]
-        print(f"❌ User {user_id} disconnected.")
+    def disconnect(self, websocket: WebSocket, user_id: int = None):
+        if user_id is not None:
+            if user_id in self.active_connections:
+                if websocket in self.active_connections[user_id]:
+                    self.active_connections[user_id].remove(websocket)
+                # Jika tidak ada koneksi tersisa untuk user ini, hapus keynya
+                if not self.active_connections[user_id]:
+                    del self.active_connections[user_id]
+            print(f"❌ User {user_id} disconnected.")
+        else:
+            # Jika tidak ada user_id, mungkin ini adalah admin websocket
+            if websocket in self.admin_connections:
+                self.admin_connections.remove(websocket)
+            print(f"❌ Admin connection closed.")
 
-        # Disconnect dari Admin List
+        # Juga cek dan hapus dari admin connections jika ada
         if websocket in self.admin_connections:
             self.admin_connections.remove(websocket)
         print(f"❌ Connection closed.")
@@ -130,22 +136,16 @@ async def ws_admin_endpoint(websocket: WebSocket):
 
     # 3. Hubungkan ke Manager
     manager.admin_connections.append(websocket)
+    print(f"🛡️ Admin {email} connected to WebSocket.")
 
     try:
         while True:
             data = await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        # Gunakan fungsi disconnect yang benar untuk admin
+        if websocket in manager.admin_connections:
+            manager.admin_connections.remove(websocket)
         print("🛡️ Admin Disconnected.")
-
-    # --- MASUK KE MANAGER ---
-    manager.admin_connections.append(websocket)
-
-    try:
-        while True:
-            data = await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
 
 
 @app.websocket("/ws/{user_id}")
@@ -281,7 +281,11 @@ def startup_db_client():
 
 # 2. Setup Klien Groq
 # Masukkan API Key Groq Anda di sini
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+def get_groq_client():
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY environment variable is not set")
+    return Groq(api_key=api_key)
 
 # --- 1. DEFINISIKAN STRUKTUR SKRIPSI YANG BAKU ---
 PEDOMAN_SKRIPSI = {
@@ -1069,15 +1073,16 @@ async def generate_text(
         # PANGGIL API GROQ
         # Catatan: Saya ubah model ke 'llama3-70b-8192' agar stabil. 
         # Jika ingin memakai yang Anda tulis, pastikan nama modelnya valid di Groq.
-        completion = client.chat.completions.create(
-            # model="llama-3.3-70b-versatile", 
-            model="openai/gpt-oss-120b", 
+        groq_client = get_groq_client()
+        completion = groq_client.chat.completions.create(
+            # model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.6,
-            max_tokens=2048, 
+            max_tokens=2048,
         )
 
         generated_content = completion.choices[0].message.content
@@ -1155,7 +1160,8 @@ async def refine_chapter(
         """
 
         # Panggil AI
-        completion = client.chat.completions.create(
+        groq_client = get_groq_client()
+        completion = groq_client.chat.completions.create(
             # model="llama-3.3-70b-versatile",
             model="openai/gpt-oss-120b",
             messages=[
@@ -1163,7 +1169,7 @@ async def refine_chapter(
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.6,
-            max_tokens=2048, 
+            max_tokens=2048,
         )
 
         revised_content = completion.choices[0].message.content

@@ -253,7 +253,7 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
 
 PRICING_MAP = {
     5: 15000,    # Paket 5 Kredit = Rp 15.000
-    10: 30000,   # Paket 10 Kredit = Rp 30.000
+    10: 35000,   # Paket 10 Kredit = Rp 35.000
     50: 150000,   # Paket 50 Kredit = Rp 150.000
     100: 300000,   # Paket 100 Kredit = Rp 100.000
     # Default fallback: 3000 per kredit jika user memasukkan jumlah lain

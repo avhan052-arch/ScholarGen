@@ -668,6 +668,50 @@ async def update_credits_manual(
     finally:
         db.close()
 
+# 6. Aksi Admin: Reset Kredit User
+@app.post("/admin/reset_user/{user_id}")
+async def reset_user_credits(
+    user_id: int,
+    admin: database.User = Depends(get_current_admin_user),
+    db: Session = Depends(auth.get_db)
+):
+    try:
+        user = db.query(database.User).filter(database.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+        # Simpan nilai kredit sebelum direset untuk notifikasi
+        old_credits = user.credits
+
+        # Reset kredit ke nilai awal (3 kredit sesuai dengan nilai default saat registrasi)
+        user.credits = 3
+
+        db.commit()
+
+        # Kirim notifikasi ke user yang bersangkutan
+        await manager.broadcast_to_user(user_id, {
+            "type": "credit_update",
+            "amount": user.credits,
+            "message": f"Kredit Anda telah direset oleh admin dari {old_credits} KR menjadi {user.credits} KR."
+        })
+
+        return {
+            "message": "Kredit user berhasil direset ke nilai awal",
+            "new_balance": user.credits,
+            "old_balance": old_credits
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"❌ Error di admin reset user: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat mereset kredit user"
+        )
+    finally:
+        db.close()
+
 # Fungsi untuk mengambil struktur berdasarkan input user
 # Helper: Struktur Skripsi Baku
 def get_structured_instruction(jenis, bab):

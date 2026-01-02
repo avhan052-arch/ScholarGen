@@ -518,27 +518,26 @@
     let wsConnection = null;
 
     // --- 2. WEBSOCKET FUNCTION ---
-     // --- 2. WEBSOCKET FUNCTION ---
     function initWebSocket(userId) {
         if (wsConnection) { wsConnection.close(); }
-        const wsUrl = `https://scholar-gen.up.railway.app/app/ws/${userId}`;
+        const wsUrl = `wss://scholar-gen.up.railway.app/ws/${userId}`;
         try {
             wsConnection = new WebSocket(wsUrl);
             wsConnection.onopen = function(event) { console.log("✅ WS Terhubung"); };
-            
+
             wsConnection.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                
+
                 // 1. Handle Update Saldo (Success)
                 if (data.type === 'credit_update') {
                     const creditEl = document.getElementById('user-credits');
                     if(creditEl) creditEl.innerText = data.amount;
-                    
+
                     const Toast = Swal.mixin({
                         toast: true, position: 'top-end',
                         showConfirmButton: false, timer: 3000, timerProgressBar: true
                     });
-                    
+
                     // Gunakan message dari server jika ada, default: "Saldo bertambah"
                     const msg = data.message || "Saldo berhasil ditambahkan!";
                     Toast.fire({ icon: 'success', title: msg });
@@ -561,7 +560,7 @@
                 }
                 // ------------------------------------------------------------------
             };
-            
+
             wsConnection.onclose = function() { wsConnection = null; };
         } catch (e) { console.error("Gagal WS:", e); }
     }

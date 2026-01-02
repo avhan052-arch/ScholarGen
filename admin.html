@@ -590,7 +590,7 @@
 
             json.users.forEach(u => {
                 const isDisabled = u.is_admin ? 'disabled' : '';
-                
+
                 tbody.innerHTML += `
                     <tr>
                         <td>#${u.id}</td>
@@ -603,6 +603,9 @@
                             </button>
                             <button class="btn btn-danger btn-sm" onclick="adjustCredit(${u.id}, 10, 'subtract')" ${isDisabled}>
                                 <i class="fa-solid fa-minus"></i> 10
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="resetUser(${u.id})" ${isDisabled}>
+                                <i class="fa-solid fa-rotate-left"></i> Reset
                             </button>
                         </td>
                     </tr>
@@ -751,6 +754,37 @@
                     }
                 } catch (error) {
                     Swal.fire('Gagal', 'Gagal mengupdate saldo user.', 'error');
+                }
+            }
+        }
+
+        async function resetUser(userId) {
+            const result = await Swal.fire({
+                title: 'Reset User?',
+                text: "Anda yakin ingin mereset kredit user ini ke nilai awal?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#ef4444',
+                confirmButtonText: 'Ya, Reset!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/reset_user/${userId}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+
+                    if(res.ok) {
+                        Swal.fire('Berhasil!', 'Kredit user berhasil direset.', 'success');
+                        loadData();
+                    } else {
+                        throw new Error("Gagal menghubungi server");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat mereset user.', 'error');
                 }
             }
         }

@@ -32,7 +32,8 @@ SECRET_KEY = "ini_kunci_rahasia_saya_123" # Copy dari auth.py
 ALGORITHM = "HS256"
 
 # Masukkan Client ID Anda di sini
-GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
+# GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "ID_LAMA_ANDA")
 
 os.makedirs("uploads", exist_ok=True)
 

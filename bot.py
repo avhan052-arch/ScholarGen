@@ -20,22 +20,32 @@ BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:8000")
 # --- FUNGSI LOGIN OTOMATIS ---
 def refresh_admin_token():
     global BOT_ADMIN_TOKEN
-    print("🔄 Mencoba mengambil Token Admin otomatis...")
+    print(f"🔄 Mencoba mengambil Token Admin otomatis...")
+    print(f"🔍 DEBUG: BASE_URL: {BASE_URL}")
+    print(f"🔍 DEBUG: ADMIN_EMAIL: {ADMIN_EMAIL}")
+    print(f"🔍 DEBUG: ADMIN_PASSWORD: {'[HIDDEN]' if ADMIN_PASSWORD else '[EMPTY]'}")
     try:
-        res = requests.post(f"{BASE_URL}/admin/token", data={
+        login_url = f"{BASE_URL}/admin/token"
+        print(f"📡 DEBUG: Attempting to connect to: {login_url}")
+        res = requests.post(login_url, data={
             "username": ADMIN_EMAIL,
             "password": ADMIN_PASSWORD
         })
+        print(f"📡 DEBUG: Login response status: {res.status_code}")
+        print(f"📡 DEBUG: Login response text: {res.text}")
+
         if res.ok:
             data = res.json()
             BOT_ADMIN_TOKEN = data.get("access_token")
-            print(f"✅ Token Admin berhasil didapatkan!")
+            print(f"✅ Token Admin berhasil didapatkan! Token length: {len(BOT_ADMIN_TOKEN) if BOT_ADMIN_TOKEN else 0}")
             return True
         else:
             print(f"❌ Gagal Login Admin: {res.text}")
             return False
     except Exception as e:
         print(f"❌ Error saat koneksi ke Server Login: {e}")
+        import traceback
+        print(f"❌ Error traceback: {traceback.format_exc()}")
         return False
 
 # --- MUAT ID ADMIN SAAT STARTUP ---
@@ -63,6 +73,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer() # Acknowledge dulu biar loading berhenti
 
+    print(f"🔍 DEBUG: Button clicked - Query data: {query.data}")
+    print(f"🔍 DEBUG: Current BOT_ADMIN_TOKEN: {'Available' if BOT_ADMIN_TOKEN else 'NOT AVAILABLE'}")
+    print(f"🔍 DEBUG: Query message has caption: {bool(query.message.caption)}")
+    print(f"🔍 DEBUG: Query message has reply_markup: {bool(query.message.reply_markup)}")
+
     # 1. Validasi Data
     if not query.data:
         print("⚠️ Callback data kosong.")
@@ -71,6 +86,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         action, req_id = query.data.split("_")
         request_id = int(req_id)
+        print(f"✅ DEBUG: Action: {action}, Request ID: {request_id}")
     except ValueError:
         print(f"❌ Error format data: {query.data}")
         await query.edit_message_text(text="⚠️ Error: Format data tombol tidak valid.")
@@ -80,21 +96,31 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "approve":
         endpoint = f"{BASE_URL}/admin/approve_topup/{request_id}"
         text_success = "✅ Top Up Disetujui!"
+        print(f"✅ DEBUG: Using approve endpoint: {endpoint}")
     else:
         endpoint = f"{BASE_URL}/admin/reject_topup/{request_id}"
         text_success = "❌ Top Up Ditolak!"
+        print(f"✅ DEBUG: Using reject endpoint: {endpoint}")
 
     try:
         # 3. Kirim Request ke Server
+        print(f"📡 DEBUG: Sending request to {endpoint}")
+        print(f"📡 DEBUG: Authorization header: Bearer {'[TOKEN]' if BOT_ADMIN_TOKEN else '[MISSING]'}")
         res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
+        print(f"📡 DEBUG: Response status: {res.status_code}")
+        print(f"📡 DEBUG: Response text: {res.text}")
 
         # 4. Handle jika Token Expired (401)
         if res.status_code == 401:
             print("⚠️ Token Admin kadaluarsa. Melakukan Auto-Login...")
             if refresh_admin_token():
+                print("📡 DEBUG: Retrying request with new token...")
                 res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
+                print(f"📡 DEBUG: Retry response status: {res.status_code}")
+                print(f"📡 DEBUG: Retry response text: {res.text}")
             else:
                 msg = "❌ GAGAL: Token invalid & Login Gagal."
+                print(f"❌ DEBUG: Failed to refresh token, updating message with error: {msg}")
                 if query.message.caption:
                     await query.edit_message_caption(caption=query.message.caption + f"\n\n{msg}")
                 else:
@@ -103,20 +129,33 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 5. Update Pesan jika Sukses
         if res.ok:
-            if query.message.caption:
-                await query.edit_message_caption(
-                    caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
-                    parse_mode="HTML"
-                )
-            else:
-                await query.edit_message_text(
-                    text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
-                    parse_mode="HTML"
-                )
-            
+            print(f"✅ DEBUG: Request successful, updating message with status: {action.upper()} BY ADMIN")
+            try:
+                if query.message.caption:
+                    await query.edit_message_caption(
+                        caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
+                        parse_mode="HTML"
+                    )
+                    print("✅ DEBUG: Caption updated successfully")
+                else:
+                    await query.edit_message_text(
+                        text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
+                        parse_mode="HTML"
+                    )
+                    print("✅ DEBUG: Text updated successfully")
+            except Exception as edit_error:
+                print(f"❌ DEBUG: Error updating message text/caption: {edit_error}")
+
             # Hapus tombol
-            if query.message.reply_markup:
-                await query.edit_message_reply_markup(reply_markup=None)
+            print(f"🗑️ DEBUG: Attempting to remove reply markup. Current markup: {bool(query.message.reply_markup)}")
+            try:
+                if query.message.reply_markup:
+                    await query.edit_message_reply_markup(reply_markup=None)
+                    print("✅ DEBUG: Reply markup removed successfully")
+                else:
+                    print("⚠️ DEBUG: No reply markup to remove")
+            except Exception as markup_error:
+                print(f"❌ DEBUG: Error removing reply markup: {markup_error}")
 
             # 6. Kirim Notifikasi ke User via WebSocket
             try:
@@ -133,11 +172,15 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     user = db.query(database.User).filter(database.User.id == topup_request.user_id).first()
                     if user:
                         status_text = "disetujui" if action == "approve" else "ditolak"
+                        print(f"📡 DEBUG: Sending notification to user {user.id}: Top up {status_text}")
                         await manager.broadcast_to_user(user.id, {
                             "type": "topup_notification",
                             "status": "approved" if action == "approve" else "rejected",
                             "message": f"Top up sebesar {topup_request.amount} kredit telah {status_text} oleh admin."
                         })
+                        print(f"✅ DEBUG: Notification sent to user {user.id}")
+                else:
+                    print(f"⚠️ DEBUG: Top up request {request_id} not found in database")
             except Exception as e:
                 print(f"❌ Gagal mengirim notifikasi ke user: {e}")
             finally:
@@ -145,6 +188,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Handle Error Server (500, 404, dll)
             error_msg = f"❌ Gagal: {res.text}"
+            print(f"❌ DEBUG: Request failed with error: {error_msg}")
             if query.message.caption:
                 await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
             else:
@@ -154,8 +198,9 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Handle Error Umum (Koneksi, dll)
         error_str = str(e).lower()
         if "not modified" in error_str:
+            print("⚠️ DEBUG: Message not modified error (likely double click), ignoring")
             return # Biasanya double click, abaikan
-        
+
         print(f"❌ Error pada button_click: {e}")
         error_msg = f"❌ Error: {str(e)}"
         if query.message.caption:
@@ -218,15 +263,16 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
 
 def run_polling():
     """Fungsi ini dijalankan di thread terpisah"""
+    print("🔄 Refreshing admin token in bot thread...")
     refresh_admin_token()
     application = Application.builder().token(BOT_TOKEN).build()
-    
+
     # Registrasi Handler
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(button_click))
-    
+
     print("🤖 Telegram Bot berjalan di background...")
-    
+
     # PERBAIKAN DI SINI: Jangan buat manual loop, biarkan run_polling yang handle
     try:
         application.run_polling()
@@ -234,6 +280,10 @@ def run_polling():
         print(f"❌ Error di Bot: {e}")
 
 def start_bot():
+    # Refresh token saat bot dimulai
+    print("🔄 Refreshing admin token at startup...")
+    refresh_admin_token()
+
     bot_thread = threading.Thread(target=run_polling, daemon=True)
     bot_thread.start()
     print("🤖 Telegram Bot Thread dimulai...")

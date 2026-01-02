@@ -416,31 +416,46 @@ async def get_admin_login_page():
 # 2. Endpoint Login Khusus Admin
 @app.post("/admin/token")
 async def admin_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(auth.get_db)):
-    # 1. Cari user berdasarkan email
-    user = db.query(database.User).filter(database.User.email == form_data.username).first()
-    
-    # 2. Cek apakah user ada DAN password benar
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Email atau password salah"
+    try:
+        # 1. Cari user berdasarkan email
+        user = db.query(database.User).filter(database.User.email == form_data.username).first()
+
+        # 2. Cek apakah user ada DAN password benar
+        if not user or not auth.verify_password(form_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email atau password salah"
+            )
+
+        # 3. CEK KRUSIAL: Apakah user ini ADMIN?
+        if not user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Akses ditolak: Anda bukan Administrator"
+            )
+
+        # 4. Generate Token
+        access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = auth.create_access_token(
+            data={"sub": user.email},
+            expires_delta=access_token_expires
         )
-    
-    # 3. CEK KRUSIAL: Apakah user ini ADMIN?
-    if not user.is_admin:
+
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Log error untuk debugging
+        print(f"❌ Error di admin login: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Akses ditolak: Anda bukan Administrator"
+            status_code=500,
+            detail="Terjadi kesalahan internal saat login"
         )
-    
-    # 4. Generate Token
-    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = auth.create_access_token(
-        data={"sub": user.email}, 
-        expires_delta=access_token_expires
-    )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+    finally:
+        # Pastikan koneksi database ditutup
+        db.close()
 
 # 1. Ambil Semua Data User
 @app.get("/admin/users")
@@ -460,110 +475,152 @@ async def get_all_users(admin: database.User = Depends(get_current_admin_user), 
 
 # Endpoint khusus untuk Dashboard Stats
 @app.get("/admin/stats")
-async def get_admin_stats(admin: database.User = Depends(get_current_admin_user), db: Session = Depends(database.get_db)):
-    
-    # 1. Hitung Total User
-    total_users = db.query(database.User).count()
-    
-    # 2. Hitung Request Pending
-    pending_requests = db.query(database.TopUpRequest).filter(database.TopUpRequest.status == "Pending").count()
-    
-    # 3. Hitung Total Pendapatan (SUM 'price' WHERE status = Approved) <--- UBAH DISINI
-    revenue_result = db.query(func.sum(database.TopUpRequest.price)).filter(database.TopUpRequest.status == "Approved").scalar()
-    total_revenue = revenue_result if revenue_result else 0 
+async def get_admin_stats(admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
 
-    return {
-        "total_users": total_users,
-        "pending_requests": pending_requests,
-        "total_revenue": total_revenue
-    }
+    try:
+        # 1. Hitung Total User
+        total_users = db.query(database.User).count()
+
+        # 2. Hitung Request Pending
+        pending_requests = db.query(database.TopUpRequest).filter(database.TopUpRequest.status == "Pending").count()
+
+        # 3. Hitung Total Pendapatan (SUM 'price' WHERE status = Approved) <--- UBAH DISINI
+        revenue_result = db.query(func.sum(database.TopUpRequest.price)).filter(database.TopUpRequest.status == "Approved").scalar()
+        total_revenue = revenue_result if revenue_result else 0
+
+        return {
+            "total_users": total_users,
+            "pending_requests": pending_requests,
+            "total_revenue": total_revenue
+        }
+    except Exception as e:
+        print(f"❌ Error di admin stats: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat mengambil statistik admin"
+        )
+    finally:
+        db.close()
 
 # 2. Ambil Semua Request Top Up (Global, bukan milik sendiri)
 @app.get("/admin/topup_requests")
 async def get_all_topups(admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
-    # requests = db.query(database.TopUpRequest).order_by(database.TopUpRequest.created_at.desc()).all()
+    try:
+        # requests = db.query(database.TopUpRequest).order_by(database.TopUpRequest.created_at.desc()).all()
         # Ambil data dengan logika urutan: Pending (Terbaru) -> Approved (Terbaru) -> Rejected (Terbaru)
-    requests = db.query(TopUpRequest).order_by(
-        # 1. Mengurutkan berdasarkan Status (Bobot Prioritas)
-        case(
-            (TopUpRequest.status == 'Pending', 0), # Paling Atas
-            (TopUpRequest.status == 'Approved', 1),
-            (TopUpRequest.status == 'Rejected', 2),
-            else_=3
-        ),
-        # 2. Mengurutkan berdasarkan Waktu (Terbaru di dalem masing-masing status)
-        TopUpRequest.created_at.desc()
-    ).all()
-    result = []
-    for r in requests:
-        user = db.query(database.User).filter(database.User.id == r.user_id).first()
-        result.append({
-            "id": r.id,
-            "user_email": user.email if user else "Unknown",
-            "amount": r.amount,
-            "proof_filename": r.account_number, # Kita simpan nama file di sini
-            "status": r.status,
-            "created_at": str(r.created_at)
-        })
-        print(result)
-    return {"requests": result}
+        requests = db.query(TopUpRequest).order_by(
+            # 1. Mengurutkan berdasarkan Status (Bobot Prioritas)
+            case(
+                (TopUpRequest.status == 'Pending', 0), # Paling Atas
+                (TopUpRequest.status == 'Approved', 1),
+                (TopUpRequest.status == 'Rejected', 2),
+                else_=3
+            ),
+            # 2. Mengurutkan berdasarkan Waktu (Terbaru di dalem masing-masing status)
+            TopUpRequest.created_at.desc()
+        ).all()
+        result = []
+        for r in requests:
+            user = db.query(database.User).filter(database.User.id == r.user_id).first()
+            result.append({
+                "id": r.id,
+                "user_email": user.email if user else "Unknown",
+                "amount": r.amount,
+                "proof_filename": r.account_number, # Kita simpan nama file di sini
+                "status": r.status,
+                "created_at": str(r.created_at)
+            })
+            # Hapus print(result) karena ini akan mencetak data ke console
+        return {"requests": result}
+    except Exception as e:
+        print(f"❌ Error di admin topup requests: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat mengambil request top up"
+        )
+    finally:
+        db.close()
 
 # 3. Aksi Admin: Setujui Top Up
 @app.post("/admin/approve_topup/{request_id}")
 async def admin_approve_topup(request_id: int, admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
-    req = db.query(database.TopUpRequest).filter(TopUpRequest.id == request_id).first()
-    if not req: raise HTTPException(status_code=404, detail="Request tidak ditemukan")
-    
-    if req.status == "Approved":
-        raise HTTPException(status_code=400, detail="Sudah disetujui sebelumnya")
+    try:
+        req = db.query(database.TopUpRequest).filter(TopUpRequest.id == request_id).first()
+        if not req: raise HTTPException(status_code=404, detail="Request tidak ditemukan")
 
-    req.status = "Approved"
-    
-    # Tambah kredit ke user
-    user = db.query(database.User).filter(database.User.id == req.user_id).first()
-    user.credits += req.amount
-    
-    db.commit()
-     # Ini penting untuk memastikan user.credits mencerminkan nilai di file DB
-    db.refresh(user) 
+        if req.status == "Approved":
+            raise HTTPException(status_code=400, detail="Sudah disetujui sebelumnya")
 
-    revenue_result = db.query(func.sum(database.TopUpRequest.price)).filter(TopUpRequest.status == "Approved").scalar()
-    current_total_revenue = revenue_result if revenue_result else 0
+        req.status = "Approved"
 
-   # --- TAMBAHKAN INI ---
-    # Beritahu User
-    await manager.broadcast_to_user(user.id, {
-        "type": "credit_update", 
-        "amount": user.credits, 
-        "message": f"Top up sebesar {req.amount} kredit disetujui!"
-    })
-    
-    # Beritahu SEMUA ADMIN (Realtime Update Widget)
-    await manager.broadcast_to_admins({
-        "type": "update_revenue",
-        "total_revenue": current_total_revenue
-    })
-    # -------------------
-    return {"message": "Top Up Disetujui", "new_balance": user.credits}
+        # Tambah kredit ke user
+        user = db.query(database.User).filter(database.User.id == req.user_id).first()
+        user.credits += req.amount
+
+        db.commit()
+         # Ini penting untuk memastikan user.credits mencerminkan nilai di file DB
+        db.refresh(user)
+
+        revenue_result = db.query(func.sum(database.TopUpRequest.price)).filter(TopUpRequest.status == "Approved").scalar()
+        current_total_revenue = revenue_result if revenue_result else 0
+
+       # --- TAMBAHKAN INI ---
+        # Beritahu User
+        await manager.broadcast_to_user(user.id, {
+            "type": "credit_update",
+            "amount": user.credits,
+            "message": f"Top up sebesar {req.amount} kredit disetujui!"
+        })
+
+        # Beritahu SEMUA ADMIN (Realtime Update Widget)
+        await manager.broadcast_to_admins({
+            "type": "update_revenue",
+            "total_revenue": current_total_revenue
+        })
+        # -------------------
+        return {"message": "Top Up Disetujui", "new_balance": user.credits}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"❌ Error di admin approve topup: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat menyetujui top up"
+        )
+    finally:
+        db.close()
 
 # 4. Aksi Admin: Tolak Top Up
 @app.post("/admin/reject_topup/{request_id}")
 async def admin_reject_topup(request_id: int, admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
-    req = db.query(database.TopUpRequest).filter(TopUpRequest.id == request_id).first()
-    if not req: raise HTTPException(status_code=404, detail="Request tidak ditemukan")
-    
-    req.status = "Rejected"
-    db.commit()
-     # --- TAMBAHKAN INI ---
-    # Kirim notifikasi ke user yang request
-    await manager.broadcast_to_user(req.user_id, {
-        "type": "topup_notification",
-        "status": "rejected",
-        "message": "Maaf, permintaan Top Up Anda ditolak oleh Admin."
-    })
-    # -------------------
+    try:
+        req = db.query(database.TopUpRequest).filter(TopUpRequest.id == request_id).first()
+        if not req: raise HTTPException(status_code=404, detail="Request tidak ditemukan")
 
-    return {"message": "Top Up Ditolak"}
+        req.status = "Rejected"
+        db.commit()
+         # --- TAMBAHKAN INI ---
+        # Kirim notifikasi ke user yang request
+        await manager.broadcast_to_user(req.user_id, {
+            "type": "topup_notification",
+            "status": "rejected",
+            "message": "Maaf, permintaan Top Up Anda ditolak oleh Admin."
+        })
+        # -------------------
+
+        return {"message": "Top Up Ditolak"}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"❌ Error di admin reject topup: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat menolak top up"
+        )
+    finally:
+        db.close()
 
 # 5. Aksi Admin: Update Saldo Manual
 @app.post("/admin/update_credits")
@@ -571,24 +628,36 @@ async def update_credits_manual(
     user_id: int = Form(...),
     amount: int = Form(...),
     action: str = Form(...), # 'add' or 'subtract'
-    admin: database.User = Depends(get_current_admin_user), 
+    admin: database.User = Depends(get_current_admin_user),
     db: Session = Depends(auth.get_db)
 ):
-    user = db.query(database.User).filter(database.User.id == user_id).first()
-    if not user: raise HTTPException(status_code=404, detail="User tidak ditemukan")
-    
-    if action == 'add':
-        user.credits += amount
-    elif action == 'subtract':
-        user.credits -= amount
-    
-    db.commit()
-    await manager.broadcast_to_user(user_id, {
-    "type": "credit_update", 
-    "amount": user.credits, 
-    "message": "Saldo diperbarui oleh Admin."
-})
-    return {"message": "Saldo berhasil diupdate", "new_balance": user.credits}
+    try:
+        user = db.query(database.User).filter(database.User.id == user_id).first()
+        if not user: raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+        if action == 'add':
+            user.credits += amount
+        elif action == 'subtract':
+            user.credits -= amount
+
+        db.commit()
+        await manager.broadcast_to_user(user_id, {
+        "type": "credit_update",
+        "amount": user.credits,
+        "message": "Saldo diperbarui oleh Admin."
+        })
+        return {"message": "Saldo berhasil diupdate", "new_balance": user.credits}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"❌ Error di admin update credits: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat memperbarui kredit"
+        )
+    finally:
+        db.close()
 
 # Fungsi untuk mengambil struktur berdasarkan input user
 # Helper: Struktur Skripsi Baku

@@ -200,10 +200,12 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
         
         if not user:
             # 4. Jika User Belum Ada, Buatkan Otomatis (Auto-Register)
-            random_password = auth.get_password_hash("google_user_temp")
-            
+            # Pastikan password tidak melebihi 72 karakter untuk menghindari batasan bcrypt
+            temp_password = "google_user_temp"[:72]
+            random_password = auth.get_password_hash(temp_password)
+
             new_user = database.User(
-                email=email, 
+                email=email,
                 hashed_password=random_password,
                 credits=3 # Saldo awal user baru
             )
@@ -236,6 +238,10 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
         raise HTTPException(status_code=400, detail=f"Token Google tidak valid: {e}")
     except Exception as e:
         print(f"❌ ERROR GENERAL GOOGLE LOGIN: {e}")
+        # Cek apakah error terkait dengan batasan password bcrypt
+        error_msg = str(e)
+        if "password cannot be longer than 72 bytes" in error_msg:
+            raise HTTPException(status_code=400, detail="Password terlalu panjang, maksimal 72 karakter")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan server saat login Google: {e}")
 
 # 1. SERVE FILE UPLOAD (AGAR ADMIN BISA LIHAT BUKTI TRANSFER)

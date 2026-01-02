@@ -171,6 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         manager.disconnect(websocket, user_id)
 
 # --- PASTIKAN ADA KODE INI ---
+# --- ENDPOINT: LOGIN GOOGLE ---
 @app.post("/google-login")
 async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
     """Endpoint ini menerima token dari Google, memverifikasinya,
@@ -228,14 +229,14 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
             "credits": user.credits
         }
 
-     except ValueError as e:
-        # TAMBAHKAN PRINT INI
+    # --- PERBAIKAN BAGIAN ERROR INI ---
+    except ValueError as e:
+        # Debug print ini sudah dirapikan indentasinya (4 spasi)
         print(f"❌ ERROR DETAIL GOOGLE LOGIN: {e}")
-        # ------------------
-        raise HTTPException(status_code=400, detail="Token Google tidak valid")
+        raise HTTPException(status_code=400, detail=f"Token Google tidak valid: {e}")
     except Exception as e:
-        print(f"Error Google Login: {e}")
-        raise HTTPException(status_code=500, detail="Terjadi kesalahan server saat login Google")
+        print(f"❌ ERROR GENERAL GOOGLE LOGIN: {e}")
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan server saat login Google: {e}")
 
 # 1. SERVE FILE UPLOAD (AGAR ADMIN BISA LIHAT BUKTI TRANSFER)
 # app.mount("/static_uploads", StaticFiles(directory="uploads"), name="uploads")

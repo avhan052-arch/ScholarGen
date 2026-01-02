@@ -33,6 +33,9 @@ ALGORITHM = "HS256"
 
 # Masukkan Client ID Anda di sini
 GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
+
+os.makedirs("uploads", exist_ok=True)
+
 # 1. Setup App
 app = FastAPI()
 app.mount("/static_uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -636,7 +639,7 @@ async def request_topup(
         # --- 1. HITUNG HARGA AKHIR ---
         final_price = PRICING_MAP.get(amount, amount * 3000)
         # Buat folder 'uploads' jika belum ada
-        os.makedirs("uploads", exist_ok=True)
+        # os.makedirs("uploads", exist_ok=True)
         
         # Nama file = UserID + Timestamp + Ekstensi asli
         file_location = f"uploads/{current_user.id}_{int(time.time())}_{proof.filename}"

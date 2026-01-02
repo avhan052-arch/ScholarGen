@@ -151,21 +151,27 @@ async def ws_admin_endpoint(websocket: WebSocket):
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
     await websocket.accept()
-    # await manager.connect(websocket, user_id)
+
     try:
+        # Pastikan user_id adalah integer valid
         user_id = int(user_id)
     except ValueError:
-        return # Jika ID tidak valid, tutup koneksi
-    # -----------------------------------------------------
+        await websocket.close(code=1003)  # Invalid data
+        return
 
+    # Hubungkan ke manager
     await manager.connect(websocket, user_id)
+    print(f"✅ User {user_id} connected to WebSocket")
+
     try:
         # Koneksi tetap terbuka (keep alive)
         while True:
             data = await websocket.receive_text()
             # Jika mau menerima pesan dari user, tangkap di sini
+            # Untuk sekarang, kita hanya menerima pesan tanpa memproses
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
+        print(f"❌ User {user_id} disconnected from WebSocket")
 
 # --- PASTIKAN ADA KODE INI ---
 # --- ENDPOINT: LOGIN GOOGLE ---

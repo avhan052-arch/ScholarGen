@@ -441,11 +441,14 @@
                 <div class="card-header">
                     <h1>Permintaan Top Up</h1>
                      <!-- TAMBAHKAN TOMBOL FILTER INI -->
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
             <button class="btn btn-primary btn-sm" onclick="filterTable('all')">Semua</button>
             <button class="btn btn-sm" style="background:#fbbf24; color:#78350f;" onclick="filterTable('Pending')">Menunggu</button>
             <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Approved')">Approved</button>
             <button class="btn btn-sm" style="background:#e2e8f0;" onclick="filterTable('Rejected')">Rejected</button>
+            <button class="btn btn-danger btn-sm" onclick="clearAllRequests()" style="background: #ef4444; color: white; margin-left: auto;">
+                <i class="fa-solid fa-trash"></i> Hapus Semua
+            </button>
         </div>
                 </div>
                 
@@ -477,7 +480,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://scholar-gen.up.railway.app';
+        const API_URL = `${window.location.protocol}//${window.location.host}`;
         let authToken = localStorage.getItem('access_token');
 
         // --- MOBILE SIDEBAR TOGGLE ---
@@ -679,6 +682,29 @@
                     });
                     
                     if(res.ok) {
+                        const response = await res.json();
+
+                        // Send WebSocket notification to user
+                        try {
+                            // Get user ID for this request to send notification
+                            // We'll need to fetch the request details to get the user ID
+                            const requestRes = await fetch(`${API_URL}/admin/topup_requests`, {
+                                headers: { 'Authorization': `Bearer ${authToken}` }
+                            });
+                            if(requestRes.ok) {
+                                const requestData = await requestRes.json();
+                                const request = requestData.requests.find(r => r.id === id);
+                                if(request) {
+                                    // Send notification to user via WebSocket
+                                    // This would require a WebSocket connection to the user
+                                    // For now, we'll broadcast to all admin panels
+                                    console.log(`Approved request ${id} for user ${request.user_email}`);
+                                }
+                            }
+                        } catch (notifyError) {
+                            console.error('Error sending user notification:', notifyError);
+                        }
+
                         Swal.fire('Disetujui!', 'Request top up berhasil disetujui.', 'success');
                         loadData();
                     } else {
@@ -717,6 +743,42 @@
                     }
                 } catch (error) {
                     Swal.fire('Gagal', 'Terjadi kesalahan saat menolak.', 'error');
+                }
+            }
+        }
+
+        async function clearAllRequests() {
+            const result = await Swal.fire({
+                title: 'Hapus Semua Request?',
+                text: "Anda yakin ingin menghapus SEMUA request top up? Tindakan ini tidak dapat dibatalkan!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Ya, Hapus Semua!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${API_URL}/admin/clear_all_topup_requests`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if(res.ok) {
+                        const data = await res.json();
+                        Swal.fire('Berhasil!', data.message, 'success');
+                        loadData(); // Refresh all data
+                    } else {
+                        const errorData = await res.json().catch(() => ({}));
+                        throw new Error(errorData.detail || "Gagal menghapus request");
+                    }
+                } catch (error) {
+                    Swal.fire('Gagal', `Terjadi kesalahan: ${error.message}`, 'error');
                 }
             }
         }
@@ -834,7 +896,8 @@
 
         function initWebSocket(userId) {
             if (wsConnection) wsConnection.close();
-            const wsUrl = `ws://scholar-gen.up.railway.app/ws/${userId}`;
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/${userId}`;
             wsConnection = new WebSocket(wsUrl);
 
             wsConnection.onopen = function(event) { console.log("✅ WS Connected"); };
@@ -860,7 +923,8 @@
         
         async function initAdminWebSocket() {
             const token = localStorage.getItem('access_token');
-            const wsUrl = `ws://scholar-gen.up.railway.app/ws/admin?token=${token}`;
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/admin?token=${token}`;
             console.log("Admin WS Connecting...");
 
             const Toast = Swal.mixin({

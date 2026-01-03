@@ -1,280 +1,484 @@
 import os
 import json
-import threading
 import requests
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from dotenv import load_dotenv
 
-# --- KONFIGURASI BOT ---
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+# Load environment variables
+load_dotenv()
+
+# Bot configuration
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8505247790:AAGSQp2sGntSDYMWED0CdGlAbknDbbGnYXM")
 ID_FILE = "admin_chat_id.txt"
+BASE_URL = "http://localhost:8000"
 
-# --- KONFIGURASI ADMIN (AUTO LOGIN) ---
-ADMIN_EMAIL = "avhan43@gmail.com"
-ADMIN_PASSWORD = "123"
-
+# Global variables
 BOT_ADMIN_TOKEN = None
-BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:8000")
+ADMIN_CHAT_ID = None
 
-# --- FUNGSI LOGIN OTOMATIS ---
+# Dictionary to track bot messages for updates
+bot_message_tracker = {}
+
 def refresh_admin_token():
+    """Refresh admin token by logging in automatically"""
     global BOT_ADMIN_TOKEN
-    print(f"🔄 Mencoba mengambil Token Admin otomatis...")
-    print(f"🔍 DEBUG: BASE_URL: {BASE_URL}")
-    print(f"🔍 DEBUG: ADMIN_EMAIL: {ADMIN_EMAIL}")
-    print(f"🔍 DEBUG: ADMIN_PASSWORD: {'[HIDDEN]' if ADMIN_PASSWORD else '[EMPTY]'}")
+    print("🔄 Refreshing admin token...")
+    
     try:
+        # Use default admin credentials
+        admin_email = "avhan43@gmail.com"
+        admin_password = "admin123"
+        
         login_url = f"{BASE_URL}/admin/token"
-        print(f"📡 DEBUG: Attempting to connect to: {login_url}")
-        res = requests.post(login_url, data={
-            "username": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
+        response = requests.post(login_url, data={
+            "username": admin_email,
+            "password": admin_password
         })
-        print(f"📡 DEBUG: Login response status: {res.status_code}")
-        print(f"📡 DEBUG: Login response text: {res.text}")
-
-        if res.ok:
-            data = res.json()
+        
+        if response.ok:
+            data = response.json()
             BOT_ADMIN_TOKEN = data.get("access_token")
-            print(f"✅ Token Admin berhasil didapatkan! Token length: {len(BOT_ADMIN_TOKEN) if BOT_ADMIN_TOKEN else 0}")
+            print("✅ Admin token refreshed successfully!")
             return True
         else:
-            print(f"❌ Gagal Login Admin: {res.text}")
+            print(f"❌ Failed to refresh admin token: {response.text}")
             return False
     except Exception as e:
-        print(f"❌ Error saat koneksi ke Server Login: {e}")
-        import traceback
-        print(f"❌ Error traceback: {traceback.format_exc()}")
+        print(f"❌ Error refreshing admin token: {e}")
         return False
 
-# --- MUAT ID ADMIN SAAT STARTUP ---
-ADMIN_CHAT_ID = 7779707348
-if os.path.exists(ID_FILE):
-    with open(ID_FILE, "r") as f:
-        try:
-            ADMIN_CHAT_ID = int(f.read().strip())
-            print(f"📂 Admin Chat ID dimuat otomatis: {ADMIN_CHAT_ID}")
-        except ValueError:
-            print("⚠️ File ID rusak, silakan ketik /start lagi.")
-
-# --- FUNGSI HANDLER TELEGRAM ---
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def load_admin_chat_id():
+    """Load admin chat ID from file"""
     global ADMIN_CHAT_ID
-    ADMIN_CHAT_ID = update.effective_message.chat_id
+    if os.path.exists(ID_FILE):
+        with open(ID_FILE, "r") as f:
+            try:
+                ADMIN_CHAT_ID = int(f.read().strip())
+                print(f"✅ Loaded admin chat ID: {ADMIN_CHAT_ID}")
+            except ValueError:
+                print("⚠️ Invalid admin chat ID in file")
+                ADMIN_CHAT_ID = None
+
+def save_admin_chat_id(chat_id):
+    """Save admin chat ID to file"""
     with open(ID_FILE, "w") as f:
-        f.write(str(ADMIN_CHAT_ID))
+        f.write(str(chat_id))
+    print(f"✅ Saved admin chat ID: {chat_id}")
+
+def track_bot_message(request_id, chat_id, message_id):
+    """Track bot messages for future updates"""
+    bot_message_tracker[request_id] = {
+        'chat_id': chat_id,
+        'message_id': message_id
+    }
+    print(f"✅ Tracking message: Request {request_id} -> Chat {chat_id}, Message {message_id}")
+
+def get_tracked_message(request_id):
+    """Get tracked message info"""
+    return bot_message_tracker.get(request_id)
+
+def remove_tracked_message(request_id):
+    """Remove tracked message"""
+    if request_id in bot_message_tracker:
+        del bot_message_tracker[request_id]
+        print(f"🗑️ Removed tracking for request {request_id}")
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command"""
+    global ADMIN_CHAT_ID
+    chat_id = update.effective_message.chat_id
+    ADMIN_CHAT_ID = chat_id
+    save_admin_chat_id(chat_id)
+    
     await update.message.reply_text(
-        f"✅ Bot terhubung! ID Anda: {ADMIN_CHAT_ID}.\nID ini telah disimpan otomatis."
+        f"✅ Bot connected! Your ID: {chat_id}\n"
+        f"This ID has been saved automatically."
     )
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menangani klik tombol Approve/Reject"""
+    """Handle button clicks for approve/reject"""
     query = update.callback_query
-    await query.answer() # Acknowledge dulu biar loading berhenti
-
-    print(f"🔍 DEBUG: Button clicked - Query data: {query.data}")
-    print(f"🔍 DEBUG: Current BOT_ADMIN_TOKEN: {'Available' if BOT_ADMIN_TOKEN else 'NOT AVAILABLE'}")
-    print(f"🔍 DEBUG: Query message has caption: {bool(query.message.caption)}")
-    print(f"🔍 DEBUG: Query message has reply_markup: {bool(query.message.reply_markup)}")
-
-    # 1. Validasi Data
+    await query.answer()
+    
+    print(f"🔍 Button clicked: {query.data}")
+    
+    # Validate data
     if not query.data:
-        print("⚠️ Callback data kosong.")
+        print("⚠️ Empty callback data")
         return
-
+    
     try:
         action, req_id = query.data.split("_")
         request_id = int(req_id)
-        print(f"✅ DEBUG: Action: {action}, Request ID: {request_id}")
+        print(f"✅ Action: {action}, Request ID: {request_id}")
     except ValueError:
-        print(f"❌ Error format data: {query.data}")
-        await query.edit_message_text(text="⚠️ Error: Format data tombol tidak valid.")
+        print(f"❌ Invalid data format: {query.data}")
+        await query.edit_message_text(text="⚠️ Error: Invalid button data.")
         return
-
-    # 2. Tentukan Endpoint
+    
+    # Determine endpoint
     if action == "approve":
         endpoint = f"{BASE_URL}/admin/approve_topup/{request_id}"
-        text_success = "✅ Top Up Disetujui!"
-        print(f"✅ DEBUG: Using approve endpoint: {endpoint}")
+        status_text = "✅ APPROVED BY ADMIN"
     else:
         endpoint = f"{BASE_URL}/admin/reject_topup/{request_id}"
-        text_success = "❌ Top Up Ditolak!"
-        print(f"✅ DEBUG: Using reject endpoint: {endpoint}")
-
+        status_text = "❌ REJECTED BY ADMIN"
+    
+    # Ensure admin token is available
+    if not BOT_ADMIN_TOKEN:
+        print("⚠️ No admin token, refreshing...")
+        if not refresh_admin_token():
+            await query.edit_message_text(text="❌ ERROR: Admin token unavailable.")
+            return
+    
     try:
-        # 3. Kirim Request ke Server
-        print(f"📡 DEBUG: Sending request to {endpoint}")
-        print(f"📡 DEBUG: Authorization header: Bearer {'[TOKEN]' if BOT_ADMIN_TOKEN else '[MISSING]'}")
-        res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
-        print(f"📡 DEBUG: Response status: {res.status_code}")
-        print(f"📡 DEBUG: Response text: {res.text}")
-
-        # 4. Handle jika Token Expired (401)
-        if res.status_code == 401:
-            print("⚠️ Token Admin kadaluarsa. Melakukan Auto-Login...")
+        # Send request to server
+        headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+        response = requests.post(endpoint, headers=headers)
+        
+        # Handle token expiration
+        if response.status_code == 401:
+            print("⚠️ Token expired, refreshing...")
             if refresh_admin_token():
-                print("📡 DEBUG: Retrying request with new token...")
-                res = requests.post(endpoint, headers={"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"})
-                print(f"📡 DEBUG: Retry response status: {res.status_code}")
-                print(f"📡 DEBUG: Retry response text: {res.text}")
+                headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+                response = requests.post(endpoint, headers=headers)
             else:
-                msg = "❌ GAGAL: Token invalid & Login Gagal."
-                print(f"❌ DEBUG: Failed to refresh token, updating message with error: {msg}")
-                if query.message.caption:
-                    await query.edit_message_caption(caption=query.message.caption + f"\n\n{msg}")
-                else:
-                    await query.edit_message_text(text=query.message.text + f"\n\n{msg}")
+                await query.edit_message_text(text="❌ ERROR: Token invalid & Login failed.")
                 return
-
-        # 5. Update Pesan jika Sukses
-        if res.ok:
-            print(f"✅ DEBUG: Request successful, updating message with status: {action.upper()} BY ADMIN")
-            try:
-                if query.message.caption:
-                    await query.edit_message_caption(
-                        caption=query.message.caption + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
-                        parse_mode="HTML"
-                    )
-                    print("✅ DEBUG: Caption updated successfully")
-                else:
-                    await query.edit_message_text(
-                        text=query.message.text + f"\n\n<b>STATUS: {action.upper()} BY ADMIN</b>",
-                        parse_mode="HTML"
-                    )
-                    print("✅ DEBUG: Text updated successfully")
-            except Exception as edit_error:
-                print(f"❌ DEBUG: Error updating message text/caption: {edit_error}")
-
-            # Hapus tombol
-            print(f"🗑️ DEBUG: Attempting to remove reply markup. Current markup: {bool(query.message.reply_markup)}")
-            try:
-                if query.message.reply_markup:
-                    await query.edit_message_reply_markup(reply_markup=None)
-                    print("✅ DEBUG: Reply markup removed successfully")
-                else:
-                    print("⚠️ DEBUG: No reply markup to remove")
-            except Exception as markup_error:
-                print(f"❌ DEBUG: Error removing reply markup: {markup_error}")
-
-            # Kirim notifikasi ke admin WebSocket (untuk update tabel di admin panel)
-            try:
-                from websocket_manager import manager
-
-                # Update all admin panels with the new status and stats
-                await manager.broadcast_topup_update(
-                    request_id,
-                    "Approved" if action == "approve" else "Rejected"
+        
+        # Update message based on response
+        if response.ok:
+            # Check if the message has a caption (photo message) or just text
+            if query.message.caption:
+                # Update caption with status and remove buttons
+                await query.edit_message_caption(
+                    caption=query.message.caption + f"\n\n<b>STATUS: {status_text}</b>",
+                    parse_mode="HTML",
+                    reply_markup=None
                 )
-                print(f"✅ DEBUG: Admin notification sent for request {request_id}")
-            except Exception as e:
-                print(f"❌ Gagal mengirim notifikasi ke admin: {e}")
+            else:
+                # Update text message with status and remove buttons
+                await query.edit_message_text(
+                    text=query.message.text + f"\n\n<b>STATUS: {status_text}</b>",
+                    parse_mode="HTML",
+                    reply_markup=None
+                )
+            
+            print(f"✅ Request {request_id} {action}ed successfully")
         else:
-            # Handle Error Server (500, 404, dll)
-            error_msg = f"❌ Gagal: {res.text}"
-            print(f"❌ DEBUG: Request failed with error: {error_msg}")
+            error_msg = f"❌ Failed: {response.text}"
             if query.message.caption:
                 await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
             else:
                 await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
     except Exception as e:
-        # Handle Error Umum (Koneksi, dll)
-        error_str = str(e).lower()
-        if "not modified" in error_str:
-            print("⚠️ DEBUG: Message not modified error (likely double click), ignoring")
-            return # Biasanya double click, abaikan
-
-        print(f"❌ Error pada button_click: {e}")
+        print(f"❌ Error in button_click: {e}")
         error_msg = f"❌ Error: {str(e)}"
         if query.message.caption:
             await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
         else:
             await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
+async def clear_requests_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Clear all top-up requests"""
+    user_id = update.effective_message.chat_id
+    
+    # Check if user is admin
+    if user_id != ADMIN_CHAT_ID:
+        await update.message.reply_text("❌ You don't have access to this command!")
+        return
+    
+    try:
+        endpoint = f"{BASE_URL}/admin/clear_all_topup_requests"
+        headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+        
+        response = requests.post(endpoint, headers=headers)
+        
+        if response.status_code == 401:
+            if refresh_admin_token():
+                headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+                response = requests.post(endpoint, headers=headers)
+        
+        if response.ok:
+            response_data = response.json()
+            message = response_data.get("message", "All top-up requests have been cleared!")
+            await update.message.reply_text(f"✅ {message}")
+        else:
+            await update.message.reply_text(f"❌ Failed to clear requests: {response.text}")
+    
+    except Exception as e:
+        print(f"❌ Error clearing requests: {e}")
+        await update.message.reply_text(f"❌ Error clearing requests: {str(e)}")
+
 def notify_new_topup(amount, user_email, image_filename, request_id):
-    """Kirim notifikasi ke Telegram saat ada top up baru"""
+    """Send notification to Telegram when new top-up request is made"""
+    global ADMIN_CHAT_ID
     if not ADMIN_CHAT_ID:
-        print("⚠️ BELUM ADA ADMIN CHAT ID.")
-        print("SILAKAN BUKA TELEGRAM -> CARI BOT -> KETIK /start")
+        print("⚠️ No admin chat ID set. Please use /start command in Telegram.")
         return
 
     file_path = f"uploads/{image_filename}"
 
+    # Create inline keyboard
     keyboard = [
         [
-            InlineKeyboardButton("✅ Setujui", callback_data=f"approve_{request_id}"),
-            InlineKeyboardButton("❌ Tolak", callback_data=f"reject_{request_id}")
+            InlineKeyboardButton("✅ Approve", callback_data=f"approve_{request_id}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"reject_{request_id}")
         ]
     ]
-    
-    # PERBAIKAN DI SINI: Gunakan variabel yang benar
-    reply_markup_dict = InlineKeyboardMarkup(keyboard).to_dict()
-    reply_markup_str = json.dumps(reply_markup_dict)
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     caption = (
-        f"🔔 <b>Request Top Up Baru!</b>\n\n"
+        f"🔔 <b>New Top-Up Request!</b>\n\n"
         f"👤 User: <code>{user_email}</code>\n"
-        f"💰 Jumlah: <b>{amount} Kredit</b>\n"
+        f"💰 Amount: <b>{amount} Credits</b>\n"
         f"🆔 ID: <code>{request_id}</code>"
     )
 
     try:
         with open(file_path, 'rb') as photo_file:
-            data_payload = {
-                "chat_id": str(ADMIN_CHAT_ID),
-                "caption": caption,
-                "parse_mode": "HTML",
-                "reply_markup": reply_markup_str 
-            }
-            files_payload = {
-                "document": (image_filename, photo_file)
-            }
-
+            # Send photo with caption and buttons
             response = requests.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-                data=data_payload,
-                files=files_payload
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+                data={
+                    "chat_id": str(ADMIN_CHAT_ID),
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(reply_markup.to_dict())
+                },
+                files={"photo": (image_filename, photo_file)}
             )
+
             if response.status_code == 200:
-                print("✅ Notifikasi BERHASIL dikirim!")
+                response_data = response.json()
+                if response_data.get('ok') and 'result' in response_data:
+                    message_info = response_data['result']
+                    message_id = message_info.get('message_id')
+                    if message_id:
+                        track_bot_message(request_id, ADMIN_CHAT_ID, message_id)
+                        print(f"✅ Notification with image sent! Message ID: {message_id}")
+                    else:
+                        print("✅ Notification with image sent! (No message ID)")
+                else:
+                    print("✅ Notification with image sent!")
             else:
-                print(f"❌ Gagal mengirim: {response.text}")
+                print(f"❌ Failed to send notification with image: {response.text}")
     except FileNotFoundError:
-        print("❌ GAGAL: File bukti tidak ditemukan di folder uploads!")
+        print(f"❌ ERROR: Proof file not found at {file_path}")
+
+        # Send text message as fallback
+        text = (
+            f"🔔 <b>New Top-Up Request!</b>\n\n"
+            f"👤 User: <code>{user_email}</code>\n"
+            f"💰 Amount: <b>{amount} Credits</b>\n"
+            f"🆔 ID: <code>{request_id}</code>\n"
+            f"📄 Proof: <code>{image_filename}</code> (File not found)"
+        )
+
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={
+                    "chat_id": str(ADMIN_CHAT_ID),
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(reply_markup.to_dict())
+                }
+            )
+
+            if response.status_code == 200:
+                print("✅ Fallback text notification sent!")
+            else:
+                print(f"❌ Failed to send fallback notification: {response.text}")
+        except Exception as e:
+            print(f"❌ Error sending fallback notification: {e}")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error sending notification with image: {e}")
 
-def run_polling():
-    """Fungsi ini dijalankan di thread terpisah"""
-    print("🔄 Refreshing admin token in bot thread...")
-    refresh_admin_token()
-    application = Application.builder().token(BOT_TOKEN).build()
+async def update_bot_message(request_id: int, new_status: str):
+    """Update bot message when status changes from admin panel"""
+    tracked_msg = get_tracked_message(request_id)
+    if not tracked_msg:
+        print(f"⚠️ No tracked message for request {request_id}")
+        return False
 
-    # Registrasi Handler
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CallbackQueryHandler(button_click))
+    chat_id = tracked_msg['chat_id']
+    message_id = tracked_msg['message_id']
 
-    print("🤖 Telegram Bot berjalan di background...")
-
-    # PERBAIKAN DI SINI: Jangan buat manual loop, biarkan run_polling yang handle
     try:
-        application.run_polling()
+        # Get updated request info from server
+        headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+        response = requests.get(f"{BASE_URL}/admin/topup_requests", headers=headers)
+
+        if response.status_code == 401:
+            if refresh_admin_token():
+                headers = {"Authorization": f"Bearer {BOT_ADMIN_TOKEN}"}
+                response = requests.get(f"{BASE_URL}/admin/topup_requests", headers=headers)
+
+        if response.ok:
+            data = response.json()
+            request_info = next((r for r in data.get("requests", []) if r["id"] == request_id), None)
+            if not request_info:
+                print(f"❌ Request {request_id} not found on server")
+                return False
+
+            # Create updated caption
+            caption = (
+                f"🔔 <b>New Top-Up Request!</b>\n\n"
+                f"👤 User: <code>{request_info['user_email']}</code>\n"
+                f"💰 Amount: <b>{request_info['amount']} Credits</b>\n"
+                f"🆔 ID: <code>{request_info['id']}</code>\n\n"
+                f"<b>STATUS: {new_status.upper()} BY ADMIN</b>"
+            )
+
+            # Update message in Telegram (try to update caption first)
+            update_response = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageCaption",
+                data={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps({"inline_keyboard": []})  # Remove buttons
+                }
+            )
+
+            # If updating caption fails, try updating text message
+            if update_response.status_code != 200:
+                update_response = requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText",
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": caption,  # Use caption as text
+                        "parse_mode": "HTML",
+                        "reply_markup": json.dumps({"inline_keyboard": []})  # Remove buttons
+                    }
+                )
+
+            if update_response.status_code == 200:
+                response_data = update_response.json()
+                if response_data.get('ok'):
+                    print(f"✅ Bot message updated for request {request_id}")
+                    remove_tracked_message(request_id)
+                    return True
+                else:
+                    print(f"❌ Failed to update message: {response_data}")
+                    return False
+            else:
+                print(f"❌ Failed to contact Telegram API: {update_response.text}")
+                return False
+        else:
+            print(f"❌ Failed to get request data from server: {response.text}")
+            return False
     except Exception as e:
-        print(f"❌ Error di Bot: {e}")
+        print(f"❌ Error updating bot message: {e}")
+        return False
 
 def start_bot():
-    # Refresh token saat bot dimulai
+    """Start the bot in a separate thread (for compatibility with main app)"""
+    import threading
     print("🔄 Refreshing admin token at startup...")
+    success = refresh_admin_token()
+    if not success:
+        print("❌ Failed to get admin token at startup!")
+    else:
+        print(f"✅ Token admin ready! Token length: {len(BOT_ADMIN_TOKEN) if BOT_ADMIN_TOKEN else 0}")
+
+    # Load admin chat ID
+    load_admin_chat_id()
+
+    def run_bot_thread():
+        import asyncio
+        from telegram.ext import Application
+
+        # Create and set a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _run_bot():
+            application = setup_bot()
+            print("🤖 Telegram Bot is starting...")
+            try:
+                # Initialize the application
+                await application.initialize()
+                await application.start()
+
+                # Start the updater
+                await application.updater.start_polling(drop_pending_updates=True)
+
+                # Keep the application running
+                # We'll use a simple sleep loop since run_polling is now running
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except asyncio.CancelledError:
+                    pass
+            except Exception as e:
+                print(f"❌ Error in bot polling: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                # Clean shutdown
+                await application.stop()
+                await application.shutdown()
+
+        # Run the bot coroutine in the loop
+        loop.create_task(_run_bot())
+
+        # Run the event loop
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            print("\n🛑 Bot stopped by user")
+        finally:
+            loop.stop()
+            if not loop.is_closed():
+                loop.close()
+
+    bot_thread = threading.Thread(target=run_bot_thread, daemon=True)
+    bot_thread.start()
+    print("🤖 Telegram Bot Thread started...")
+
+def setup_bot():
+    """Setup and return the bot application"""
+    # Load admin chat ID
+    load_admin_chat_id()
+
+    # Refresh admin token
     refresh_admin_token()
 
-    bot_thread = threading.Thread(target=run_polling, daemon=True)
-    bot_thread.start()
-    print("🤖 Telegram Bot Thread dimulai...")
+    # Create application
+    application = Application.builder().token(BOT_TOKEN).build()
 
-# Tambahkan main execution block agar bot bisa dijalankan langsung
+    # Add handlers
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CallbackQueryHandler(button_click))
+    application.add_handler(CommandHandler("clear_requests", clear_requests_command))
+
+    return application
+
+async def run_bot():
+    """Run the bot"""
+    application = setup_bot()
+
+    print("🤖 Telegram Bot is starting...")
+    try:
+        await application.run_polling()
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Error running bot: {e}")
+        import traceback
+        traceback.print_exc()
+
 if __name__ == "__main__":
-    print("🚀 Menjalankan Telegram Bot secara langsung...")
+    print("🚀 Starting Telegram Bot...")
+
+    # For direct execution, just start the bot normally
     start_bot()
 
     # Keep the main thread alive
@@ -283,4 +487,4 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n🛑 Bot dihentikan oleh pengguna")
+        print("\n\n🛑 Bot stopped by user")

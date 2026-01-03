@@ -104,7 +104,7 @@
 
         try {
             // Panggil endpoint khusus admin
-            const res = await fetch('http://localhost:8000/admin/token', {
+            const res = await fetch(`${window.location.protocol}//${window.location.host}/admin/token`, {
                 method: 'POST',
                 body: formData
             });

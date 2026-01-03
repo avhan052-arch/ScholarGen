@@ -171,6 +171,25 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML",
                     reply_markup=None
                 )
+
+            # Send a separate notification message to ensure mobile users see the update
+            try:
+                notification_text = f"✅ Request ID <b>{request_id}</b> has been <b>{status_text}</b>"
+                # Use requests to send the notification message to avoid context issues
+                notification_response = requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                    data={
+                        "chat_id": query.message.chat_id,
+                        "text": notification_text,
+                        "parse_mode": "HTML"
+                    }
+                )
+                if notification_response.status_code == 200:
+                    print(f"✅ Notification sent to user for request {request_id}")
+                else:
+                    print(f"⚠️ Failed to send notification: {notification_response.text}")
+            except Exception as notify_error:
+                print(f"⚠️ Could not send notification message: {notify_error}")
             
             print(f"✅ Request {request_id} {action}ed successfully")
         else:
@@ -187,6 +206,24 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
         else:
             await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
+
+        # Send error notification to ensure mobile users see the error
+        try:
+            error_notification = f"❌ Error processing request ID <b>{request_id}</b>: {str(e)}"
+            error_response = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={
+                    "chat_id": query.message.chat_id,
+                    "text": error_notification,
+                    "parse_mode": "HTML"
+                }
+            )
+            if error_response.status_code == 200:
+                print(f"✅ Error notification sent to user for request {request_id}")
+            else:
+                print(f"⚠️ Failed to send error notification: {error_response.text}")
+        except Exception as notify_error:
+            print(f"⚠️ Could not send error notification message: {notify_error}")
 
 async def clear_requests_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clear all top-up requests"""
@@ -336,7 +373,7 @@ async def update_bot_message(request_id: int, new_status: str):
                 f"🔔 <b>New Top-Up Request!</b>\n\n"
                 f"👤 User: <code>{request_info['user_email']}</code>\n"
                 f"💰 Amount: <b>{request_info['amount']} Credits</b>\n"
-                f"🆔 ID: <code>{request_info['id']}</code>\n\n"
+                f"🆔 ID: <code>{request_id}</code>\n\n"
                 f"<b>STATUS: {new_status.upper()} BY ADMIN</b>"
             )
 
@@ -370,6 +407,26 @@ async def update_bot_message(request_id: int, new_status: str):
                 if response_data.get('ok'):
                     print(f"✅ Bot message updated for request {request_id}")
                     remove_tracked_message(request_id)
+
+                    # Send a notification message to ensure mobile users see the update
+                    try:
+                        notification_text = f"✅ Request ID <b>{request_id}</b> has been <b>{new_status.upper()} BY ADMIN</b>"
+                        # Use requests to send the notification message
+                        notification_response = requests.post(
+                            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                            data={
+                                "chat_id": chat_id,
+                                "text": notification_text,
+                                "parse_mode": "HTML"
+                            }
+                        )
+                        if notification_response.status_code == 200:
+                            print(f"✅ Notification sent to user for request {request_id}")
+                        else:
+                            print(f"⚠️ Failed to send notification: {notification_response.text}")
+                    except Exception as notify_error:
+                        print(f"⚠️ Could not send notification message: {notify_error}")
+
                     return True
                 else:
                     print(f"❌ Failed to update message: {response_data}")

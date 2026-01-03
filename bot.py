@@ -12,7 +12,13 @@ load_dotenv()
 # Bot configuration
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8505247790:AAGSQp2sGntSDYMWED0CdGlAbknDbbGnYXM")
 ID_FILE = "admin_chat_id.txt"
-BASE_URL = "http://localhost:8000"
+# Use Railway domain in production, localhost for development
+import os
+RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+if RAILWAY_DOMAIN:
+    BASE_URL = f"https://{RAILWAY_DOMAIN}"
+else:
+    BASE_URL = "http://localhost:8000"  # For local testing
 
 # Global variables
 BOT_ADMIN_TOKEN = None
@@ -407,18 +413,30 @@ def start_bot():
                 await application.initialize()
                 await application.start()
 
-                # Start the updater
-                await application.updater.start_polling(drop_pending_updates=True)
+                # Check if we're in production (like Railway) to use webhooks instead of polling
+                import os
+                if os.environ.get("RAILWAY_DEPLOYMENT") or os.environ.get("PRODUCTION"):
+                    # Use webhook for production
+                    print("📡 Using webhook mode for production")
+                    # Webhook setup would go here, but for now we'll use a simple approach
+                    # that avoids the conflict error
+                    await application.updater.start_webhook(
+                        webhook_url=f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN')}/bot{BOT_TOKEN}",
+                        drop_pending_updates=True
+                    )
+                else:
+                    # Use polling for local development
+                    print("📡 Using polling mode for development")
+                    await application.updater.start_polling(drop_pending_updates=True)
 
                 # Keep the application running
-                # We'll use a simple sleep loop since run_polling is now running
                 try:
                     while True:
                         await asyncio.sleep(1)
                 except asyncio.CancelledError:
                     pass
             except Exception as e:
-                print(f"❌ Error in bot polling: {e}")
+                print(f"❌ Error in bot: {e}")
                 import traceback
                 traceback.print_exc()
             finally:
@@ -467,7 +485,22 @@ async def run_bot():
 
     print("🤖 Telegram Bot is starting...")
     try:
-        await application.run_polling()
+        # Check if we're in production (like Railway) to use webhooks instead of polling
+        import os
+        if os.environ.get("RAILWAY_DEPLOYMENT") or os.environ.get("PRODUCTION"):
+            # Use webhook for production to avoid conflicts
+            print("📡 Using webhook mode for production")
+            webhook_url = f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'your-app-name.up.railway.app')}/bot{BOT_TOKEN}"
+            await application.run_webhook(
+                listen="0.0.0.0",
+                port=int(os.environ.get("PORT", 8443)),
+                url_path=BOT_TOKEN,
+                webhook_url=webhook_url
+            )
+        else:
+            # Use polling for local development
+            print("📡 Using polling mode for development")
+            await application.run_polling()
     except KeyboardInterrupt:
         print("\n🛑 Bot stopped by user")
     except Exception as e:

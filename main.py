@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
+
 import google.oauth2.id_token
 import google.auth.transport.requests
 from fastapi import WebSocket, WebSocketDisconnect
@@ -29,8 +32,8 @@ from auth import decode_access_token, SECRET_KEY, ALGORITHM
 from bot import start_bot, notify_new_topup
 
 # Masukkan Client ID Anda di sini
-# GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "ID_LAMA_ANDA")
+GOOGLE_CLIENT_ID = "483904910670-di4quivnermuaa6utuq6qfv4dhhq5sol.apps.googleusercontent.com"
+# GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "ID_LAMA_ANDA")
 
 os.makedirs("uploads", exist_ok=True)
 
@@ -217,19 +220,31 @@ PRICING_MAP = {
     # Default fallback: 3000 per kredit jika user memasukkan jumlah lain
 }
 
-# Fungsi Helper untuk menambahkan kolom 'price' (Migrasi Database)
+# Fungsi Helper untuk menambahkan kolom migrasi (Migrasi Database)
 def migrate_database():
     try:
         from sqlalchemy import text
         engine = database.engine
         with engine.connect() as conn:
-            # Coba tambahkan kolom price jika belum ada
-            conn.execute(text("ALTER TABLE topup_requests ADD COLUMN price INTEGER DEFAULT 0"))
+            # Coba tambahkan kolom price jika belum ada di topup_requests
+            try:
+                conn.execute(text("ALTER TABLE topup_requests ADD COLUMN price INTEGER DEFAULT 0"))
+                print("✅ Kolom 'price' berhasil ditambahkan ke tabel topup_requests.")
+            except Exception as e:
+                # Kolom price mungkin sudah ada
+                print(f"ℹ️ Info Migrasi price: {e}")
+
+            # Coba tambahkan kolom created_at jika belum ada di users
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN created_at TEXT DEFAULT 'Now'"))
+                print("✅ Kolom 'created_at' berhasil ditambahkan ke tabel users.")
+            except Exception as e:
+                # Kolom created_at mungkin sudah ada
+                print(f"ℹ️ Info Migrasi created_at: {e}")
+
             conn.commit()
-        print("✅ Kolom 'price' berhasil ditambahkan ke database.")
     except Exception as e:
-        # Jika kolom sudah ada, akan muncul error, kita abaikan saja
-        print(f"ℹ️ Info Migrasi: {e}")
+        print(f"❌ Error saat migrasi database: {e}")
 
 # Ini memastikan tabel 'users' dibuat otomatis saat server nyala
 @app.on_event("startup")
@@ -278,7 +293,9 @@ def startup_db_client():
 # 2. Setup Klien Groq
 # Masukkan API Key Groq Anda di sini
 def get_groq_client():
+    # api_key = os.environ.get("GROQ_API_KEY")
     api_key = os.environ.get("GROQ_API_KEY")
+
     if not api_key:
         raise ValueError("GROQ_API_KEY environment variable is not set")
     return Groq(api_key=api_key)

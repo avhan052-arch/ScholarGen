@@ -11,3 +11,4 @@ groq
 scholarly
 python-docx
 python-telegram-bot
+python-dotenv

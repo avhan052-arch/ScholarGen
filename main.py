@@ -1005,16 +1005,17 @@ async def get_me(current_user: database.User = Depends(auth.get_current_user)):
 @app.post("/search")
 async def search_references(request: dict, current_user: database.User = Depends(auth.get_current_user)):
     query = request.get("query", "")
-    if not query: raise HTTPException(status_code=400, detail="Query kosong")
+    if not query:
+        raise HTTPException(status_code=400, detail="Query kosong")
 
     all_results = []
-    
+
     # 1. CARI DI OPENALEX (Sumber Utama)
     headers = {'User-Agent': 'Mozilla/5.0 ScholarGenApp/1.0', 'Accept': 'application/json'}
     url = f"https://api.openalex.org/works?search={query}&per_page=3&sort=relevance_score:desc"
-    
+
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)  # Increased timeout
         if response.status_code == 200:
             data = response.json()
             for work in data.get('results', []):
@@ -1030,9 +1031,16 @@ async def search_references(request: dict, current_user: database.User = Depends
                     "pdf_url": work.get('best_oa_location', {}).get('pdf_url'),
                     "source": "OpenAlex"
                 })
+        else:
+            print(f"⚠️ OpenAlex API returned status code: {response.status_code}")
+    except requests.exceptions.Timeout:
+        print(f"⚠️ OpenAlex API request timed out for query: {query}")
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Network error when contacting OpenAlex: {e}")
+    except ValueError:  # Includes JSON decode errors
+        print(f"⚠️ Invalid JSON response from OpenAlex for query: {query}")
     except Exception as e:
-        # JANGAN GUNAKAN 'pass' LAGI. Log error-nya agar kita tahu penyebabnya.
-        print(f"⚠️ Gagal menghubungi OpenAlex: {e}")
+        print(f"⚠️ Unexpected error when contacting OpenAlex: {e}")
 
 
     # 2. CARI DI GOOGLE SCHOLAR (Sumber Tambahan)
@@ -1040,7 +1048,8 @@ async def search_references(request: dict, current_user: database.User = Depends
         gs_results = search_google_scholar(query, limit=5)
         # Gabungkan hasil
         all_results.extend(gs_results)
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Error in Google Scholar search: {e}")
 
     # 3. Return Semua Hasil
     return {"status": "success", "data": all_results}

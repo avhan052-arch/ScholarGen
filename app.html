@@ -660,7 +660,8 @@
     }
 
     // --- 6. API HELPER ---
-    const API_BASE_URL = "https://localhost:8000"; 
+    // Use the same protocol and host as the current page instead of hardcoding
+    const API_BASE_URL = window.location.origin;
     async function apiCall(endpoint, body = {}) {
         const res = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',

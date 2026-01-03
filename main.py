@@ -359,6 +359,13 @@ PEDOMAN_SKRIPSI = {
        - Menginterpretasikan hasil penelitian.
        - Menghubungkan hasil dengan teori di Bab 2.
        - Membahas apakah hipotesis terbukti atau tidak.
+    """,
+    "Setelah Membuat Bab 4 Lanjut Buat Daftar Pustaka": """
+    - Mengikuti gaya sitasi APA Edisi 7
+    - Ditulis menggunakan bahasa Indonesia yang formal
+    - Disusun berdasarkan abjad (A–Z)
+    - Hanya memuat sumber yang benar-benar relevan dengan topik skripsi
+    - Menggunakan format penulisan skripsi perguruan tinggi (nama penulis, tahun, judul, penerbit/jurnal, dan DOI/URL jika ada)
     """
 }
 

@@ -150,22 +150,37 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Update message based on response
         if response.ok:
-            # Update message with status and remove buttons
-            await query.edit_message_text(
-                text=query.message.text + f"\n\n<b>STATUS: {status_text}</b>",
-                parse_mode="HTML",
-                reply_markup=None
-            )
+            # Check if the message has a caption (photo message) or just text
+            if query.message.caption:
+                # Update caption with status and remove buttons
+                await query.edit_message_caption(
+                    caption=query.message.caption + f"\n\n<b>STATUS: {status_text}</b>",
+                    parse_mode="HTML",
+                    reply_markup=None
+                )
+            else:
+                # Update text message with status and remove buttons
+                await query.edit_message_text(
+                    text=query.message.text + f"\n\n<b>STATUS: {status_text}</b>",
+                    parse_mode="HTML",
+                    reply_markup=None
+                )
             
             print(f"✅ Request {request_id} {action}ed successfully")
         else:
             error_msg = f"❌ Failed: {response.text}"
-            await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
+            if query.message.caption:
+                await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
+            else:
+                await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
     except Exception as e:
         print(f"❌ Error in button_click: {e}")
         error_msg = f"❌ Error: {str(e)}"
-        await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
+        if query.message.caption:
+            await query.edit_message_caption(caption=query.message.caption + f"\n\n{error_msg}")
+        else:
+            await query.edit_message_text(text=query.message.text + f"\n\n{error_msg}")
 
 async def clear_requests_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clear all top-up requests"""
@@ -205,6 +220,8 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
         print("⚠️ No admin chat ID set. Please use /start command in Telegram.")
         return
 
+    file_path = f"uploads/{image_filename}"
+
     # Create inline keyboard
     keyboard = [
         [
@@ -214,7 +231,7 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    text = (
+    caption = (
         f"🔔 <b>New Top-Up Request!</b>\n\n"
         f"👤 User: <code>{user_email}</code>\n"
         f"💰 Amount: <b>{amount} Credits</b>\n"
@@ -222,33 +239,64 @@ def notify_new_topup(amount, user_email, image_filename, request_id):
     )
 
     try:
-        # Send text message with buttons
-        response = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            data={
-                "chat_id": str(ADMIN_CHAT_ID),
-                "text": text,
-                "parse_mode": "HTML",
-                "reply_markup": json.dumps(reply_markup.to_dict())
-            }
+        with open(file_path, 'rb') as photo_file:
+            # Send photo with caption and buttons
+            response = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+                data={
+                    "chat_id": str(ADMIN_CHAT_ID),
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(reply_markup.to_dict())
+                },
+                files={"photo": (image_filename, photo_file)}
+            )
+
+            if response.status_code == 200:
+                response_data = response.json()
+                if response_data.get('ok') and 'result' in response_data:
+                    message_info = response_data['result']
+                    message_id = message_info.get('message_id')
+                    if message_id:
+                        track_bot_message(request_id, ADMIN_CHAT_ID, message_id)
+                        print(f"✅ Notification with image sent! Message ID: {message_id}")
+                    else:
+                        print("✅ Notification with image sent! (No message ID)")
+                else:
+                    print("✅ Notification with image sent!")
+            else:
+                print(f"❌ Failed to send notification with image: {response.text}")
+    except FileNotFoundError:
+        print(f"❌ ERROR: Proof file not found at {file_path}")
+
+        # Send text message as fallback
+        text = (
+            f"🔔 <b>New Top-Up Request!</b>\n\n"
+            f"👤 User: <code>{user_email}</code>\n"
+            f"💰 Amount: <b>{amount} Credits</b>\n"
+            f"🆔 ID: <code>{request_id}</code>\n"
+            f"📄 Proof: <code>{image_filename}</code> (File not found)"
         )
 
-        if response.status_code == 200:
-            response_data = response.json()
-            if response_data.get('ok') and 'result' in response_data:
-                message_info = response_data['result']
-                message_id = message_info.get('message_id')
-                if message_id:
-                    track_bot_message(request_id, ADMIN_CHAT_ID, message_id)
-                    print(f"✅ Notification sent! Message ID: {message_id}")
-                else:
-                    print("✅ Notification sent! (No message ID)")
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={
+                    "chat_id": str(ADMIN_CHAT_ID),
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(reply_markup.to_dict())
+                }
+            )
+
+            if response.status_code == 200:
+                print("✅ Fallback text notification sent!")
             else:
-                print("✅ Notification sent!")
-        else:
-            print(f"❌ Failed to send notification: {response.text}")
+                print(f"❌ Failed to send fallback notification: {response.text}")
+        except Exception as e:
+            print(f"❌ Error sending fallback notification: {e}")
     except Exception as e:
-        print(f"❌ Error sending notification: {e}")
+        print(f"❌ Error sending notification with image: {e}")
 
 async def update_bot_message(request_id: int, new_status: str):
     """Update bot message when status changes from admin panel"""
@@ -277,8 +325,8 @@ async def update_bot_message(request_id: int, new_status: str):
                 print(f"❌ Request {request_id} not found on server")
                 return False
 
-            # Create updated text message
-            text = (
+            # Create updated caption
+            caption = (
                 f"🔔 <b>New Top-Up Request!</b>\n\n"
                 f"👤 User: <code>{request_info['user_email']}</code>\n"
                 f"💰 Amount: <b>{request_info['amount']} Credits</b>\n"
@@ -286,17 +334,30 @@ async def update_bot_message(request_id: int, new_status: str):
                 f"<b>STATUS: {new_status.upper()} BY ADMIN</b>"
             )
 
-            # Update message in Telegram
+            # Update message in Telegram (try to update caption first)
             update_response = requests.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText",
+                f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageCaption",
                 data={
                     "chat_id": chat_id,
                     "message_id": message_id,
-                    "text": text,
+                    "caption": caption,
                     "parse_mode": "HTML",
                     "reply_markup": json.dumps({"inline_keyboard": []})  # Remove buttons
                 }
             )
+
+            # If updating caption fails, try updating text message
+            if update_response.status_code != 200:
+                update_response = requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText",
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": caption,  # Use caption as text
+                        "parse_mode": "HTML",
+                        "reply_markup": json.dumps({"inline_keyboard": []})  # Remove buttons
+                    }
+                )
 
             if update_response.status_code == 200:
                 response_data = update_response.json()

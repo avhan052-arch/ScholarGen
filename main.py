@@ -189,7 +189,7 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
         )
 
         return {
-            "access_token": access_token, 
+            "access_token": access_token,
             "token_type": "bearer",
             "email": user.email,
             "credits": user.credits
@@ -207,6 +207,9 @@ async def google_login(token_data: dict, db: Session = Depends(auth.get_db)):
         if "password cannot be longer than 72 bytes" in error_msg:
             raise HTTPException(status_code=400, detail="Password terlalu panjang, maksimal 72 karakter")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan server saat login Google: {e}")
+    finally:
+        # Pastikan koneksi database ditutup
+        db.close()
 
 # 1. SERVE FILE UPLOAD (AGAR ADMIN BISA LIHAT BUKTI TRANSFER)
 # app.mount("/static_uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -432,17 +435,21 @@ async def admin_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Sess
 # 1. Ambil Semua Data User
 @app.get("/admin/users")
 async def get_all_users(admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
-    users = db.query(database.User).all()
-    result = []
-    for u in users:
-        result.append({
-            "id": u.id,
-            "email": u.email,
-            "credits": u.credits,
-            "is_admin": u.is_admin,
-            "created_at": str(u.created_at) if hasattr(u, 'created_at') else "-"
-        })
-    return {"users": result}
+    try:
+        users = db.query(database.User).all()
+        result = []
+        for u in users:
+            result.append({
+                "id": u.id,
+                "email": u.email,
+                "credits": u.credits,
+                "is_admin": u.is_admin,
+                "created_at": str(u.created_at) if hasattr(u, 'created_at') else "-"
+            })
+        return {"users": result}
+    finally:
+        # Pastikan koneksi database ditutup
+        db.close()
 
 
 # Endpoint khusus untuk Dashboard Stats
@@ -543,6 +550,19 @@ async def admin_approve_topup(request_id: int, admin: database.User = Depends(ge
 
         # Update all admin panels with the new status and stats
         await manager.broadcast_topup_update(request_id, "Approved")
+
+        # Beritahu Bot Telegram untuk update pesan (jika ada)
+        try:
+            import requests as req
+            bot_webhook_url = "http://localhost:8001/webhook/update_bot_message"
+            webhook_data = {
+                "request_id": request_id,
+                "status": "Approved"
+            }
+            req.post(bot_webhook_url, json=webhook_data)
+        except Exception as e:
+            print(f"❌ Gagal mengirim notifikasi ke bot: {e}")
+
         # -------------------
         return {"message": "Top Up Disetujui", "new_balance": user.credits}
     except HTTPException:
@@ -577,6 +597,19 @@ async def admin_reject_topup(request_id: int, admin: database.User = Depends(get
 
         # Update all admin panels with the new status and stats
         await manager.broadcast_topup_update(request_id, "Rejected")
+
+        # Beritahu Bot Telegram untuk update pesan (jika ada)
+        try:
+            import requests as req
+            bot_webhook_url = "http://localhost:8001/webhook/update_bot_message"
+            webhook_data = {
+                "request_id": request_id,
+                "status": "Rejected"
+            }
+            req.post(bot_webhook_url, json=webhook_data)
+        except Exception as e:
+            print(f"❌ Gagal mengirim notifikasi ke bot: {e}")
+
         # -------------------
 
         return {"message": "Top Up Ditolak"}
@@ -592,7 +625,39 @@ async def admin_reject_topup(request_id: int, admin: database.User = Depends(get
     finally:
         db.close()
 
-# 5. Aksi Admin: Update Saldo Manual
+# 5. Aksi Admin: Hapus Semua Request Top Up
+@app.post("/admin/clear_all_topup_requests")
+async def clear_all_topup_requests(admin: database.User = Depends(get_current_admin_user), db: Session = Depends(auth.get_db)):
+    try:
+        # Hapus semua request top up
+        deleted_count = db.query(database.TopUpRequest).delete()
+        db.commit()
+
+        # Kirim notifikasi ke semua admin bahwa request telah dihapus
+        try:
+            from websocket_manager import manager
+            await manager.broadcast_to_admins({
+                "type": "requests_cleared",
+                "message": f"Semua request top up ({deleted_count}) telah dihapus oleh admin"
+            })
+        except Exception as ws_error:
+            print(f"❌ Gagal mengirim notifikasi WebSocket: {ws_error}")
+
+        return {
+            "message": f"Berhasil menghapus {deleted_count} request top up",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        print(f"❌ Error di clear_all_topup_requests: {str(e)}")
+        db.rollback()  # Rollback jika terjadi error
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat menghapus request top up"
+        )
+    finally:
+        db.close()
+
+# 6. Aksi Admin: Update Saldo Manual
 @app.post("/admin/update_credits")
 async def update_credits_manual(
     user_id: int = Form(...),

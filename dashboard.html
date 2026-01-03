@@ -90,7 +90,7 @@
         resultsDiv.innerHTML = '<p style="color:#666;">Sedang mencari di database OpenAlex...</p>';
 
         try {
-            const response = await fetch('http://localhost:8000/search', {
+            const response = await fetch(`${window.location.protocol}//${window.location.host}/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query })
@@ -179,7 +179,7 @@
             // Tidak lama. Mari kita coba kirim innerText dulu (tanpa bold).
             const textContent = contentDiv.innerText;
 
-            const response = await fetch('http://localhost:8000/export-word', {
+            const response = await fetch(`${window.location.protocol}//${window.location.host}/export-word`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -231,7 +231,7 @@
             result.innerText = "";
 
             try {
-                const response = await fetch('http://localhost:8000/generate', {
+                const response = await fetch(`${window.location.protocol}//${window.location.host}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -282,7 +282,7 @@
             }
 
             try {
-                const response = await fetch('http://localhost:8000/export-complete', {
+                const response = await fetch(`${window.location.protocol}//${window.location.host}/export-complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
